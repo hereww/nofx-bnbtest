@@ -298,10 +298,10 @@ export function AITradersPage({ onTraderSelect }: AITradersPageProps) {
     try {
       if (running) {
         await api.stopTrader(traderId)
-      toast.success(t('aiTradersToast.stopped', language))
+        toast.success(t('aiTradersToast.stopped', language))
       } else {
         await api.startTrader(traderId)
-      toast.success(t('aiTradersToast.started', language))
+        toast.success(t('aiTradersToast.started', language))
       }
 
       await mutateTraders()
