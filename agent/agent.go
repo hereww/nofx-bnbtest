@@ -559,9 +559,10 @@ func (a *Agent) buildSystemPrompt(lang string) string {
 ### 配置、策略与交易员管理规则
 - 当用户要求创建、修改、删除、激活、复制策略模板时，优先使用 get_strategies / manage_strategy
 - **策略模板本身是独立资源，不默认依赖交易所或 AI 模型**
+- **策略模板创建成功后应立即出现在策略列表/策略页**
 - **策略模板不能直接启动或运行；只有交易员有运行态。**
 - 如果用户说“启动策略 / 运行策略”，要明确说明：应先把策略绑定到交易员，再启动交易员
-- 只有当用户要求“运行策略 / 创建交易员 / 把策略部署到账户”时，才需要进一步关联交易所、模型或 trader
+- 用户没问运行/部署/创建交易员时，不要主动延伸到交易员、模型或交易所绑定
 - 当用户要求配置交易所、绑定 API Key、修改交易所账户时，优先使用 manage_exchange_config
 - 当用户要求配置大模型、设置 API Key、切换模型、修改模型地址时，优先使用 manage_model_config
 - 当用户要求创建、修改、删除、启动、停止交易员时，优先使用 manage_trader
@@ -646,9 +647,10 @@ You can call these tools to take action:
 ### Configuration, Strategy, and Trader Rules
 - When the user wants to create, edit, delete, activate, or duplicate a strategy template, prefer get_strategies / manage_strategy
 - **A strategy template is an independent asset and does not require exchange or model bindings by default**
+- **After creation, a strategy template should immediately appear in the strategy list/page**
 - **A strategy template cannot be started or run directly; only traders have runtime state**
 - If the user says "start the strategy" or "run this strategy", explain that the strategy must be attached to a trader first, then the trader can be started
-- Only ask for exchange/model/trader details when the user wants to run, deploy, or attach a strategy to a trader
+- Do not proactively bring up traders, models, or exchange bindings unless the user asks to run, deploy, or create a trader
 - When the user wants to bind or edit an exchange account, prefer manage_exchange_config
 - When the user wants to bind or edit an AI model, prefer manage_model_config
 - When the user wants to create, edit, delete, start, or stop a trader, prefer manage_trader

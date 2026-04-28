@@ -246,55 +246,6 @@ func TestToolManageStrategyRejectsFixedMinPositionSizeUpdates(t *testing.T) {
 	}
 }
 
-func TestToolManageStrategyReportsChangedAndRejectedFields(t *testing.T) {
-	dbPath := filepath.Join(t.TempDir(), "strategy-change-summary.db")
-	st, err := store.New(dbPath)
-	if err != nil {
-		t.Fatalf("create store: %v", err)
-	}
-	a := New(nil, st, DefaultConfig(), slog.Default())
-
-	resp := a.toolManageStrategy("default", `{"action":"create","name":"高频-短线ETH","config":{"coin_source":{"source_type":"static","static_coins":["ETHUSDT"]},"indicators":{"klines":{"primary_timeframe":"1m","selected_timeframes":["1m","3m"]}},"order_execution_speed":"fast"}}`)
-	if strings.Contains(resp, `"error"`) {
-		t.Fatalf("expected create to succeed with rejected unknown fields, got: %s", resp)
-	}
-	for _, want := range []string{
-		`"created_strategy_id"`,
-		`"changed_fields"`,
-		`coin_source.source_type`,
-		`indicators.klines.primary_timeframe`,
-		`"rejected_fields"`,
-		`order_execution_speed (not in current strategy config)`,
-		`"unchanged_defaults"`,
-	} {
-		if !strings.Contains(resp, want) {
-			t.Fatalf("expected response to contain %q, got: %s", want, resp)
-		}
-	}
-
-	strategies, err := st.Strategy().List("default")
-	if err != nil {
-		t.Fatalf("list strategies: %v", err)
-	}
-	var created *store.Strategy
-	for _, strategy := range strategies {
-		if strategy.Name == "高频-短线ETH" {
-			created = strategy
-			break
-		}
-	}
-	if created == nil {
-		t.Fatalf("expected strategy to be created")
-	}
-	var cfg map[string]any
-	if err := json.Unmarshal([]byte(created.Config), &cfg); err != nil {
-		t.Fatalf("parse config: %v", err)
-	}
-	if _, ok := cfg["order_execution_speed"]; ok {
-		t.Fatalf("unknown field should not be persisted: %s", created.Config)
-	}
-}
-
 func TestExchangeSkillOptionSummaryMatchesManualPage(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "exchange-options.db")
 	st, err := store.New(dbPath)
@@ -420,6 +371,63 @@ func TestSkillVisibleFieldSummaryForStrategyCoversManualPageFields(t *testing.T)
 	}
 	if strings.Contains(summary, "最小开仓金额") {
 		t.Fatalf("strategy field summary should not expose fixed min position size editing: %s", summary)
+	}
+}
+
+func TestStrategyVisibleFieldSummaryUsesTargetStrategyType(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "strategy-type-field-summary.db")
+	st, err := store.New(dbPath)
+	if err != nil {
+		t.Fatalf("create store: %v", err)
+	}
+	cfg := store.GetDefaultStrategyConfig("zh")
+	cfg.StrategyType = "grid_trading"
+	cfg.GridConfig = &store.GridStrategyConfig{
+		Symbol:          "ETHUSDT",
+		GridCount:       12,
+		TotalInvestment: 1000,
+		Leverage:        3,
+		UseATRBounds:    true,
+		ATRMultiplier:   2,
+		Distribution:    "gaussian",
+	}
+	raw, err := json.Marshal(cfg)
+	if err != nil {
+		t.Fatalf("marshal strategy config: %v", err)
+	}
+	strategy := &store.Strategy{
+		ID:            "strategy-grid-fields",
+		UserID:        "default",
+		Name:          "我的第一个网格策略",
+		Description:   "",
+		IsPublic:      false,
+		ConfigVisible: true,
+		Config:        string(raw),
+	}
+	if err := st.Strategy().Create(strategy); err != nil {
+		t.Fatalf("create strategy: %v", err)
+	}
+	a := New(nil, st, DefaultConfig(), slog.Default())
+
+	session := skillSession{
+		Name:   "strategy_management",
+		Action: "update_config",
+		TargetRef: &EntityReference{
+			ID:   strategy.ID,
+			Name: strategy.Name,
+		},
+	}
+	resources := a.buildActiveSessionResources("default", session)
+	if got := resources["target_strategy_type"]; got != "grid_trading" {
+		t.Fatalf("expected grid strategy type in resources, got: %#v", got)
+	}
+	fields, ok := resources["target_editable_fields"].([]string)
+	if !ok {
+		t.Fatalf("expected editable field list in resources, got: %#v", resources["target_editable_fields"])
+	}
+	joined := strings.Join(fields, ",")
+	if !strings.Contains(joined, "symbol") || strings.Contains(joined, "source_type") {
+		t.Fatalf("expected grid-only editable fields in resources, got: %s", joined)
 	}
 }
 

@@ -252,7 +252,19 @@ func allowedFieldSpecsForSkillSession(session skillSession, lang string) []llmFl
 		add(&out, "show_in_competition", displayCatalogFieldName("show_in_competition", lang), false)
 	case "strategy_management":
 		if session.Action == "create" || session.Action == "update_config" {
-			add(&out, "config_patch", "Partial StrategyConfig JSON patch inferred from the user's strategy intent. Use this for strategy requirements such as target coins, trend style, short/long bias, indicators, risk, timeframes, and prompt sections.", false)
+			configPatchDescription := "Partial StrategyConfig JSON patch inferred from the user's strategy intent."
+			switch explicitStrategyCreateType(session) {
+			case "grid_trading":
+				configPatchDescription += " Current strategy_type is grid_trading: use only grid_config and publish/common fields; do not use coin source, indicators, timeframes, confidence, or prompt-section fields."
+			case "ai_trading":
+				configPatchDescription += " Current strategy_type is ai_trading: use coin source, indicators, risk, timeframes, and prompt sections; do not use grid_config fields."
+			default:
+				configPatchDescription += " Include strategy_type first when the user chooses AI or grid; after strategy_type is known, use only fields for that type."
+			}
+			add(&out, "config_patch", configPatchDescription, false)
+		}
+		if session.Action == "create" {
+			add(&out, "awaiting_final_confirmation", "Set true only after you have produced a final user-facing creation summary from the current structured config and are waiting for the user's final confirmation before executing create.", false)
 		}
 		if session.Action == "update_prompt" {
 			add(&out, "prompt", "Full strategy prompt text to write into the strategy custom prompt.", false)
@@ -263,7 +275,11 @@ func allowedFieldSpecsForSkillSession(session skillSession, lang string) []llmFl
 			add(&out, "config_value", strategyConfigFieldDisplayName("config_value", lang), false)
 		}
 		add(&out, "name", slotDisplayName("name", lang), true)
-		for _, key := range manualStrategyEditableFieldKeys() {
+		keys := manualStrategyEditableFieldKeys()
+		if strategyType := explicitStrategyCreateType(session); strategyType != "" {
+			keys = manualStrategyEditableFieldKeysForType(strategyType)
+		}
+		for _, key := range keys {
 			add(&out, key, strategyConfigFieldDisplayName(key, lang), false)
 		}
 	}

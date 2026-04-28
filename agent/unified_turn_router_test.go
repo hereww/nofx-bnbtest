@@ -2,8 +2,11 @@ package agent
 
 import (
 	"context"
+	"path/filepath"
 	"strings"
 	"testing"
+
+	"nofx/store"
 )
 
 func TestParseUnifiedTurnDecisionNormalizesContextPolicy(t *testing.T) {
@@ -139,6 +142,62 @@ func TestExecuteUnifiedTurnDecisionDirectAnswerRecordsHistory(t *testing.T) {
 	}
 }
 
+func TestExecuteUnifiedTurnDecisionContinueActiveDoesNotHandOffToPlanner(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "continue-active-router.db")
+	st, err := store.New(dbPath)
+	if err != nil {
+		t.Fatalf("create store: %v", err)
+	}
+	a := New(nil, st, DefaultConfig(), nil)
+	userID := int64(102)
+
+	session := newActiveSkillSession(userID, "strategy_management", "create")
+	session.Goal = "创建网格策略"
+	session.CollectedFields["name"] = "我的网格策略"
+	session.CollectedFields["strategy_type"] = "grid_trading"
+	setActiveSessionPendingHint(&session, "现在还需要确认网格交易对、网格数量、总投入、杠杆和价格区间。")
+	a.saveActiveSkillSession(session)
+
+	decision := normalizeUnifiedTurnDecision(unifiedTurnDecision{
+		TopicIntent:    "continue_active",
+		BusinessAction: "planned_agent",
+		ContextMode:    "use_current",
+		Confidence:     0.9,
+	})
+	answer, handled, err := a.executeUnifiedTurnDecision(context.Background(), "default", userID, "zh", "那你帮我创吧", decision, nil)
+	if err != nil {
+		t.Fatalf("execute unified decision: %v", err)
+	}
+	if !handled {
+		t.Fatal("expected active session continuation to be handled")
+	}
+	if !strings.Contains(answer, "先不创建空模板") || strings.Contains(answer, "交易机器人") || strings.Contains(answer, "AI模型和交易所") {
+		t.Fatalf("expected strategy session to continue without planner/trader handoff, got: %s", answer)
+	}
+	if _, ok := a.getActiveSkillSession(userID); !ok {
+		t.Fatalf("expected strategy active session to remain pending")
+	}
+}
+
+func TestGuardUnexecutedActiveTaskCompletionBlocksCreationClaim(t *testing.T) {
+	session := ActiveSkillSession{
+		SkillName:  "strategy_management",
+		ActionName: "create",
+	}
+	reply, blocked := guardUnexecutedActiveTaskCompletion("zh", session, "已经创建好了。策略现在就在你的策略列表里。")
+	if !blocked {
+		t.Fatalf("expected unexecuted active create completion claim to be blocked")
+	}
+	if !strings.Contains(reply, "还没有真正创建") {
+		t.Fatalf("expected honest not-created reply, got: %s", reply)
+	}
+
+	_, blocked = guardUnexecutedActiveTaskCompletion("zh", session, "我建议先用 BTCUSDT 做新手网格策略。")
+	if blocked {
+		t.Fatalf("non-completion proposal should not be blocked")
+	}
+}
+
 func TestBuildUnifiedTurnRouterPromptNamesContextPolicy(t *testing.T) {
 	a := New(nil, nil, DefaultConfig(), nil)
 	systemPrompt, userPrompt := a.buildUnifiedTurnRouterPrompt(42, "zh", "不是交易员，是策略")
@@ -148,6 +207,7 @@ func TestBuildUnifiedTurnRouterPromptNamesContextPolicy(t *testing.T) {
 		"downstream modules",
 		"tasks format",
 		"skill_tasks",
+		"topic_intent as the primary decision",
 	} {
 		if !strings.Contains(systemPrompt, want) {
 			t.Fatalf("expected system prompt to contain %q", want)

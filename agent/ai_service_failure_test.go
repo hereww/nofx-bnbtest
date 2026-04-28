@@ -52,3 +52,51 @@ func TestAIServiceFailureHighlightsUpstreamEmptyOutputRateLimit(t *testing.T) {
 		t.Fatalf("upstream empty output should not use the generic balance/auth/timeout guidance: %s", msg)
 	}
 }
+
+func TestCompletedPlanFallbackDoesNotExposeFinalSummaryFailure(t *testing.T) {
+	msg := formatCompletedPlanFallback("zh", []PlanStep{
+		{
+			Type:   planStepTypeTool,
+			Status: planStepStatusCompleted,
+			Title:  "创建名为 eeg 的策略",
+		},
+	})
+	if msg == "" {
+		t.Fatalf("expected fallback message")
+	}
+	for _, bad := range []string{"失败", "AI", "稍后"} {
+		if strings.Contains(msg, bad) {
+			t.Fatalf("fallback should not expose final summary failure %q: %s", bad, msg)
+		}
+	}
+	if !strings.Contains(msg, "已完成") || !strings.Contains(msg, "创建名为 eeg 的策略") {
+		t.Fatalf("fallback should summarize completed work, got: %s", msg)
+	}
+}
+
+func TestDeterministicCompletedPlanResponseSkipsLLMForSimpleConfirmation(t *testing.T) {
+	state := ExecutionState{
+		Steps: []PlanStep{
+			{
+				ID:     "create_strategy",
+				Type:   planStepTypeTool,
+				Status: planStepStatusCompleted,
+				Title:  "创建名为 eeg 的策略",
+			},
+			{
+				ID:          "respond",
+				Type:        planStepTypeRespond,
+				Status:      planStepStatusRunning,
+				Title:       "策略创建成功",
+				Instruction: "确认策略创建成功",
+			},
+		},
+	}
+	msg := deterministicCompletedPlanResponse("zh", state, state.Steps[1])
+	if msg == "" {
+		t.Fatalf("expected deterministic response")
+	}
+	if !strings.Contains(msg, "已完成") || !strings.Contains(msg, "创建名为 eeg 的策略") {
+		t.Fatalf("unexpected deterministic response: %s", msg)
+	}
+}

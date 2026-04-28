@@ -939,9 +939,6 @@ func (a *Agent) tryStatePriorityPath(ctx context.Context, storeUserID string, us
 		}
 	}
 	if session := a.getSkillSession(userID); strings.TrimSpace(session.Name) != "" {
-		if answer, ok := a.answerSkillSessionExplanation(storeUserID, lang, session, text); ok {
-			return answer, true, nil
-		}
 		decision, _ := a.resolveSkillSessionTurn(ctx, userID, lang, text, session)
 		switch decision.Intent {
 		case "cancel":
@@ -1252,9 +1249,9 @@ func (a *Agent) replyToActiveFlowInstantReply(ctx context.Context, userID int64,
 		}
 	}
 	if lang == "zh" {
-		return a.maybeAppendResumePrompt(userID, lang, text, "在，有什么我帮你看的？")
+		return a.maybeAppendResumePrompt(userID, lang, text, "刚才的流程我先保留着。要继续的话，直接说“继续”。")
 	}
-	return a.maybeAppendResumePrompt(userID, lang, text, "I'm here. What would you like me to help you with?")
+	return a.maybeAppendResumePrompt(userID, lang, text, "I kept the previous flow available. Say “continue” when you want to resume it.")
 }
 
 func (a *Agent) handoffFromActiveFlow(ctx context.Context, storeUserID string, userID int64, lang, text, targetSnapshotID string, onEvent func(event, data string)) (string, bool, error) {
@@ -1427,9 +1424,6 @@ func (a *Agent) classifySkillSessionInput(ctx context.Context, userID int64, lan
 	if isExplicitFlowAbort(text) {
 		return "cancel"
 	}
-	if shouldContinueSkillSessionByExpectedSlot(session, text) {
-		return "continue"
-	}
 	if strings.TrimSpace(session.Name) == "trader_management" && strings.TrimSpace(session.Action) == "create" {
 		if detectReadFastPath(text) == nil {
 			switch detectMentionedSkillDomain(text) {
@@ -1537,9 +1531,6 @@ func shouldUseLLMSkillSessionClassifier(session skillSession, text string) bool 
 	if isExplicitFlowAbort(text) || isYesReply(text) || isNoReply(text) {
 		return false
 	}
-	if shouldContinueSkillSessionByExpectedSlot(session, text) {
-		return false
-	}
 	return true
 }
 
@@ -1596,200 +1587,6 @@ func shouldInterruptSkillSessionByExplicitDomainMention(session skillSession, te
 		return false
 	}
 	return looksLikeNewTopLevelIntent(text)
-}
-
-func looksLikeExplanationQuestion(text string) bool {
-	lower := strings.ToLower(strings.TrimSpace(text))
-	if lower == "" {
-		return false
-	}
-	return containsAny(lower, []string{
-		"怎么", "什么意思", "为什么", "格式", "要求", "示例", "例子", "怎么填", "怎么写", "是啥", "是什么", "有哪些", "有什么", "可选", "选项",
-		"how", "what", "why", "format", "requirement", "example", "examples", "what is", "how should", "which options", "available",
-	})
-}
-
-func explanationFieldForSession(session skillSession, text string) string {
-	lower := strings.ToLower(strings.TrimSpace(text))
-	switch strings.TrimSpace(session.Name) {
-	case "model_management":
-		if containsAny(lower, []string{"provider", "提供商", "模型类型", "模型有哪些类型"}) {
-			return "provider"
-		}
-		if containsAny(lower, []string{"api key", "apikey", "api_key", "密钥"}) {
-			return "api_key"
-		}
-		if containsAny(lower, []string{"model name", "模型名称", "模型名"}) {
-			return "custom_model_name"
-		}
-		if containsAny(lower, []string{"url", "endpoint", "地址", "接口"}) {
-			return "custom_api_url"
-		}
-	case "exchange_management":
-		if containsAny(lower, []string{"交易所类型", "交易所有哪些类型", "支持哪些交易所", "哪些交易所", "exchange type", "exchange types", "which exchanges", "supported exchanges"}) {
-			return "exchange_type"
-		}
-		if containsAny(lower, []string{"api key", "apikey", "api_key"}) {
-			return "api_key"
-		}
-		if containsAny(lower, []string{"secret", "secret key", "secret_key", "密钥"}) {
-			return "secret_key"
-		}
-		if containsAny(lower, []string{"passphrase", "密码短语"}) {
-			return "passphrase"
-		}
-	case "trader_management":
-		if containsAny(lower, []string{"扫描间隔", "scan interval", "scan frequency"}) {
-			return "scan_interval_minutes"
-		}
-	case "strategy_management":
-		if containsAny(lower, []string{"杠杆", "leverage"}) {
-			return "leverage"
-		}
-	}
-	if currentStep, ok := currentSkillDAGStep(session); ok {
-		switch currentStep.ID {
-		case "resolve_provider":
-			return "provider"
-		case "resolve_exchange_type":
-			return "exchange_type"
-		case "resolve_name", "collect_name":
-			return "name"
-		case "collect_custom_api_url":
-			return "custom_api_url"
-		case "collect_custom_model_name":
-			return "custom_model_name"
-		case "collect_enabled":
-			return "enabled"
-		case "collect_field_value":
-			return fieldValue(session, "update_field")
-		}
-	}
-	return ""
-}
-
-func (a *Agent) answerSkillSessionExplanation(storeUserID, lang string, session skillSession, text string) (string, bool) {
-	if !looksLikeExplanationQuestion(text) {
-		return "", false
-	}
-	lower := strings.ToLower(strings.TrimSpace(text))
-	if containsAny(lower, []string{"选项", "有哪些", "有什么", "可选", "available options", "which options"}) {
-		if session.Name == "model_management" {
-			provider := strings.TrimSpace(fieldValue(session, "provider"))
-			if provider == "" {
-				return modelProviderChoicePrompt(lang), true
-			}
-			if lang == "zh" {
-				return fmt.Sprintf("当前 provider 是 %s。这里要填的是这个 provider 实际支持的模型名称，例如 OpenAI 常见是 `gpt-5`、`gpt-5-mini`，DeepSeek 常见是 `deepseek-chat`。你也可以直接告诉我“用默认推荐模型”。", provider), true
-			}
-			return fmt.Sprintf("The current provider is %s. This field expects a real runtime model ID for that provider, for example `gpt-5` or `gpt-5-mini` for OpenAI, or `deepseek-chat` for DeepSeek. You can also tell me to use the default recommended model.", provider), true
-		}
-		if summary := a.skillVisibleOptionSummary(storeUserID, lang, session.Name, session.Action); summary != "" {
-			return summary, true
-		}
-	}
-	if detectSkillQuestionField(session.Name, text, skillSession{Name: session.Name}) == "" &&
-		containsAny(lower, []string{"字段", "界面", "可配", "能配", "what fields", "which fields", "available fields"}) {
-		if summary := a.skillVisibleFieldSummary(storeUserID, lang, session.Name, session.Action); summary != "" {
-			return summary, true
-		}
-	}
-	field := explanationFieldForSession(session, text)
-	if lang == "zh" {
-		switch field {
-		case "api_key":
-			if session.Name == "model_management" {
-				provider := strings.TrimSpace(fieldValue(session, "provider"))
-				if provider != "" {
-					if spec, ok := modelProviderSpecByID(provider); ok && spec.UsesWalletCredential {
-						return modelProviderCredentialGuidance(lang, provider), true
-					}
-				}
-				return "API Key 一般是你在模型提供商后台生成的密钥。以 OpenAI 为例，通常以 `sk-` 开头，后面跟一长串字母数字。不要带引号外的说明文字，也不要把别的字段一起贴进来。你直接把完整 API Key 发我就行，我会继续当前模型草稿。", true
-			}
-			return "API Key 是交易所/服务商发给你的访问密钥，一般是一长串字母数字。你直接把完整值发我就行，不用附带说明文字。", true
-		case "secret_key":
-			return "Secret 是和 API Key 配套的密钥，通常也是一长串字符串。直接把完整 Secret 发我就行，不要和 API Key 填反。", true
-		case "passphrase":
-			return "Passphrase 是部分交易所额外要求的密码短语。像 OKX 这类账户除了 API Key 和 Secret 之外，还需要这个字段。直接把完整 Passphrase 发我就行。", true
-		case "custom_model_name":
-			return "模型名称填提供商实际可调用的模型 ID 就行，比如 OpenAI 常见是 `gpt-5`、`gpt-5-mini` 这类。你直接告诉我要用哪个模型名，我继续当前草稿。", true
-		case "custom_api_url":
-			return "接口地址填这个 provider 对应的 Base URL。OpenAI 常见是 `https://api.openai.com/v1`。如果你用官方地址，也可以直接告诉我“用默认地址”。", true
-		case "provider":
-			if options := a.modelSkillOptionSummary(lang); options != "" {
-				return options + "。你直接说其中一个就行。", true
-			}
-			return "这里要填模型提供商，比如 OpenAI、DeepSeek、Claude、Gemini、Qwen、Kimi、Grok、Minimax。你直接说其中一个就行。", true
-		case "exchange_type":
-			if options := a.exchangeSkillOptionSummary(lang); options != "" {
-				return options + "。你直接说要接哪个交易所就行。", true
-			}
-			return "这里要填交易所类型，比如 OKX、Binance、Bybit、Gate、KuCoin、Hyperliquid。你直接说要接哪个交易所就行。", true
-		case "name":
-			return "这里要填你想给这个对象起的名字，方便后面识别和管理。你直接说“叫 XXX”就行。", true
-		case "enabled":
-			return "启用状态就是创建后是否立即生效。你可以说“启用/开启”或“禁用/先不开启”。", true
-		case "scan_interval_minutes":
-			return "扫描间隔是交易员多久扫描一次市场，单位是分钟。你直接给我一个数字就行，比如 `5`、`15`。", true
-		case "leverage":
-			return "杠杆就是策略允许使用的倍数。你可以直接给我数字，但系统会按安全上限做约束。", true
-		case "source_type":
-			return "选币来源就是策略最初从哪里拿候选币。手动面板里常见可选项有：`static`（你自己指定静态币池）、`ai500`、`oi_top`、`oi_low`。如果你要自己指定币，就继续告诉我“静态币用 BTC、ETH”；如果你想排除某些币，也可以直接补“排除币不要 SOL、DOGE”。", true
-		case "max_positions":
-			return "最大持仓就是同一时间最多允许开几个仓位。你直接给我整数就行，比如 `3`、`5`、`10`。", true
-		case "min_confidence":
-			return "最小置信度是策略允许开仓的最低信心门槛，通常填 `0-100` 的整数。数值越高，开单会更谨慎。", true
-		case "min_risk_reward_ratio":
-			return "最小盈亏比是每笔交易至少要满足的风险收益比，比如 `1.5`、`2.0`。数值越高，策略会更挑机会。", true
-		case "primary_timeframe":
-			return "主周期是策略主要参考的 K 线周期，比如 `1m`、`5m`、`15m`、`1h`。如果你偏高频，一般会更短；偏稳一些就会更长。", true
-		case "selected_timeframes":
-			return "多周期时间框架就是除了主周期之外，还一起参考哪些周期。常见填法像 `1m,5m,15m` 或 `5m,15m,1h`，直接按逗号列给我就行。", true
-		}
-		if summary := a.skillVisibleFieldSummary(storeUserID, lang, session.Name, session.Action); summary != "" {
-			return summary, true
-		}
-		return "", false
-	}
-	switch field {
-	case "api_key":
-		return "The API key is the secret token issued by the provider. For OpenAI it usually starts with `sk-` followed by a long string. Just send the full API key and I'll keep the current draft going.", true
-	case "secret_key":
-		return "The secret key is the credential paired with your API key. Send the full secret value directly, and make sure it isn't swapped with the API key.", true
-	case "passphrase":
-		return "The passphrase is an extra credential required by some exchanges such as OKX. Send the full passphrase value and I'll continue the current draft.", true
-	case "custom_model_name":
-		return "The model name should be the real runtime model ID exposed by the provider, such as `gpt-5` or `gpt-5-mini`. Tell me which one you want and I'll continue the draft.", true
-	case "custom_api_url":
-		return "The API URL should be the provider's base endpoint. For OpenAI, a common value is `https://api.openai.com/v1`. You can also tell me to use the default endpoint.", true
-	case "provider":
-		if options := a.modelSkillOptionSummary(lang); options != "" {
-			return options + ". You can reply with any one of them.", true
-		}
-		return "The provider should be one of the supported vendors like OpenAI, DeepSeek, Claude, Gemini, Qwen, Kimi, Grok, or Minimax.", true
-	case "exchange_type":
-		if options := a.exchangeSkillOptionSummary(lang); options != "" {
-			return options + ". You can reply with the one you want to connect.", true
-		}
-		return "The exchange type should be the venue you want to connect, such as OKX, Binance, Bybit, Gate, KuCoin, or Hyperliquid.", true
-	case "name":
-		return "This field is just the display name for the object. You can answer with something like 'call it X'.", true
-	case "enabled":
-		return "Enabled means whether the config should be active right away. You can answer with enable/disable.", true
-	case "scan_interval_minutes":
-		return "The scan interval is the number of minutes between trader scans. Just send a number such as `5` or `15`.", true
-	case "leverage":
-		return "Leverage is the multiplier the strategy is allowed to use. You can send a number, and the system will still enforce safety limits.", true
-	}
-	if summary := a.skillVisibleFieldSummary(storeUserID, lang, session.Name, session.Action); summary != "" {
-		return summary, true
-	}
-	return "", false
-}
-
-func shouldContinueSkillSessionByExpectedSlot(session skillSession, text string) bool {
-	return false
 }
 
 func (a *Agent) classifySkillSessionIntentWithLLM(ctx context.Context, userID int64, lang string, session skillSession, text string) string {
@@ -3268,6 +3065,23 @@ func (a *Agent) executePlan(ctx context.Context, storeUserID string, userID int6
 			}
 			return question, nil
 		case planStepTypeRespond:
+			if finalText := deterministicCompletedPlanResponse(lang, *state, *step); finalText != "" {
+				step.Status = planStepStatusCompleted
+				step.OutputSummary = finalText
+				state.Status = executionStatusCompleted
+				state.Waiting = nil
+				state.FinalAnswer = finalText
+				state.CurrentStepID = ""
+				state.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+				if err := a.saveExecutionState(*state); err != nil {
+					return "", err
+				}
+				if onEvent != nil {
+					onEvent(StreamEventStepComplete, formatStepCompleteStatus(*step, lang))
+					emitStreamText(onEvent, finalText)
+				}
+				return finalText, nil
+			}
 			respondStartedAt := time.Now()
 			finalText, err := a.generateFinalPlanResponse(ctx, userID, lang, *state, step.Instruction)
 			a.logPlannerTiming(state.SessionID, userID, "respond_step", respondStartedAt, err)
@@ -3303,6 +3117,48 @@ func (a *Agent) executePlan(ctx context.Context, storeUserID string, userID int6
 	}
 
 	return "", fmt.Errorf("plan execution exceeded iteration limit")
+}
+
+func deterministicCompletedPlanResponse(lang string, state ExecutionState, respondStep PlanStep) string {
+	if !isCompletionOnlyRespondStep(respondStep) {
+		return ""
+	}
+	completed := make([]PlanStep, 0, len(state.Steps))
+	for _, step := range state.Steps {
+		if step.ID == respondStep.ID {
+			continue
+		}
+		if step.Status == planStepStatusCompleted && step.Type == planStepTypeTool {
+			completed = append(completed, step)
+			continue
+		}
+		if step.Status == planStepStatusCompleted && step.Type == planStepTypeReason {
+			return ""
+		}
+	}
+	if len(completed) == 0 {
+		return ""
+	}
+	return formatCompletedPlanFallback(lang, completed)
+}
+
+func isCompletionOnlyRespondStep(step PlanStep) bool {
+	text := strings.ToLower(strings.TrimSpace(step.Title + " " + step.Instruction))
+	if text == "" {
+		return false
+	}
+	return containsAny(text, []string{
+		"成功",
+		"完成",
+		"确认",
+		"created",
+		"updated",
+		"deleted",
+		"activated",
+		"duplicated",
+		"completed",
+		"confirm",
+	})
 }
 
 type fetchedToolRecord struct {
@@ -3833,18 +3689,16 @@ func formatCompletedPlanFallback(lang string, steps []PlanStep) string {
 		return ""
 	}
 	if lang == "zh" {
-		lines := []string{"当前 AI 在最后生成总结时失败了，但我已经完成这些步骤："}
+		lines := []string{"已完成："}
 		for _, label := range labels {
 			lines = append(lines, "- "+label)
 		}
-		lines = append(lines, "你现在可以先去页面确认结果；如果需要，我稍后可以继续补一版确认说明。")
 		return strings.Join(lines, "\n")
 	}
-	lines := []string{"The AI failed while generating the final summary, but I already completed these steps:"}
+	lines := []string{"Completed:"}
 	for _, label := range labels {
 		lines = append(lines, "- "+label)
 	}
-	lines = append(lines, "You can verify the result in the UI now, and I can provide a follow-up confirmation summary later.")
 	return strings.Join(lines, "\n")
 }
 

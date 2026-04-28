@@ -203,9 +203,9 @@ func buildSkillRoutingSummary(lang string, skillNames []string) string {
 			}
 		case "strategy_management":
 			if lang == "zh" {
-				parts = append(parts, "策略模板不能直接启动；只有绑定了该策略的交易员可以启动。")
+				parts = append(parts, "策略模板创建后应出现在策略列表/策略页。用户没问运行时，不要主动延伸到交易员绑定。")
 			} else {
-				parts = append(parts, "Strategy templates do not run directly; only traders bound to a strategy can run.")
+				parts = append(parts, "After creation, strategy templates should appear in the strategy list/page. Do not proactively bring up trader binding unless the user asks to run it.")
 			}
 		}
 		lines = append(lines, fmt.Sprintf("- %s: %s", name, strings.Join(cleanStringList(parts), " ")))
@@ -237,9 +237,9 @@ func buildSkillDefinitionSummary(lang string, skillNames []string) string {
 			}
 		case "strategy_management":
 			if lang == "zh" {
-				parts = append(parts, "策略模板不能直接启动；只有绑定了该策略的交易员可以启动。")
+				parts = append(parts, "策略模板创建后应出现在策略列表/策略页。用户没问运行时，不要主动延伸到交易员绑定。")
 			} else {
-				parts = append(parts, "Strategy templates do not run directly; only traders bound to a strategy can run.")
+				parts = append(parts, "After creation, strategy templates should appear in the strategy list/page. Do not proactively bring up trader binding unless the user asks to run it.")
 			}
 		}
 		lines = append(lines, fmt.Sprintf("- %s: %s", name, strings.Join(cleanStringList(parts), " ")))

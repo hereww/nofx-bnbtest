@@ -142,6 +142,7 @@ func MergeStrategyConfig(base StrategyConfig, patch map[string]any) (StrategyCon
 		return StrategyConfig{}, err
 	}
 
+	normalizeStrategyConfigPatch(patch)
 	mergeJSONMaps(mergedMap, patch)
 
 	mergedJSON, err := json.Marshal(mergedMap)
@@ -154,6 +155,18 @@ func MergeStrategyConfig(base StrategyConfig, patch map[string]any) (StrategyCon
 		return StrategyConfig{}, err
 	}
 	return merged, nil
+}
+
+func normalizeStrategyConfigPatch(patch map[string]any) {
+	if patch == nil {
+		return
+	}
+	if _, hasType := patch["strategy_type"]; hasType {
+		return
+	}
+	if gridConfig, hasGrid := patch["grid_config"]; hasGrid && gridConfig != nil {
+		patch["strategy_type"] = "grid_trading"
+	}
 }
 
 func mergeJSONMaps(dst, src map[string]any) {

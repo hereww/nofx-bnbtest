@@ -37,8 +37,9 @@
       "description": "策略类型：ai_trading（AI 量化）或 grid_trading（网格策略）。"
     },
     "symbol": {
-      "type": "string",
-      "description": "网格策略的交易对，例如 BTCUSDT。"
+      "type": "enum",
+      "values": ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT", "DOGEUSDT"],
+      "description": "网格策略页面交易对下拉选项，只能从 BTCUSDT、ETHUSDT、SOLUSDT、BNBUSDT、XRPUSDT、DOGEUSDT 中选择。用户问“交易对有哪些选项”时，直接列出这些选项。"
     },
     "source_type": {
       "type": "enum",
@@ -47,7 +48,8 @@
     },
     "static_coins": {
       "type": "string_array",
-      "description": "静态币池，例如 [\"BTCUSDT\", \"ETHUSDT\"]，source_type=static 时使用。"
+      "max_items": 10,
+      "description": "静态币池，例如 [\"BTCUSDT\", \"ETHUSDT\"]，source_type=static 时使用，手动页面最多 10 个。页面支持常规合约币种，也支持 xyz: 前缀资产（如 xyz:TSLA、xyz:GOLD、xyz:XYZ100）。"
     },
     "excluded_coins": {
       "type": "string_array",
@@ -60,7 +62,9 @@
     },
     "selected_timeframes": {
       "type": "string_array",
-      "description": "多周期分析时间框架列表，例如 [\"5m\",\"15m\",\"1h\"]。"
+      "values": ["1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "6h", "8h", "12h", "1d", "3d", "1w"],
+      "max_items": 4,
+      "description": "多周期分析时间框架列表，例如 [\"5m\",\"15m\",\"1h\"]；手动页面最多选择 4 个。"
     },
     "btceth_max_leverage": {
       "type": "int",
@@ -77,18 +81,19 @@
     "max_positions": {
       "type": "int",
       "min": 1,
-      "description": "最大同时持仓数量，最小 1。"
+      "description": "最大同时持仓数量。策略页展示为 System enforced，不是普通手动可编辑项；除非用户明确要求高级配置，否则不要主动修改。"
     },
     "min_confidence": {
       "type": "int",
-      "min": 0,
+      "min": 50,
       "max": 100,
-      "description": "最小开仓置信度，范围 0～100，数值越高开单越谨慎。"
+      "description": "最小开仓置信度，手动页面范围 50～100，数值越高开单越谨慎。"
     },
     "min_risk_reward_ratio": {
       "type": "float",
-      "min": 0.1,
-      "description": "最小盈亏比，例如 1.5 表示每笔交易至少 1.5 倍风险收益比。"
+      "min": 1,
+      "max": 10,
+      "description": "最小盈亏比，手动页面范围 1～10，步进 0.5；例如 1.5 表示每笔交易至少 1.5 倍风险收益比。"
     },
     "custom_prompt": {
       "type": "text",
@@ -112,13 +117,14 @@
     },
     "grid_count": {
       "type": "int",
-      "min": 2,
-      "description": "网格数量，grid_trading 类型专用，最小 2。"
+      "min": 5,
+      "max": 50,
+      "description": "网格数量，grid_trading 类型专用，手动页面范围 5～50。"
     },
     "total_investment": {
       "type": "float",
-      "min": 0,
-      "description": "网格总投入金额，grid_trading 类型专用。"
+      "min": 100,
+      "description": "网格总投入金额，grid_trading 类型专用，手动页面最小 100 USDT，步进 100。"
     },
     "leverage": {
       "type": "int",
@@ -146,8 +152,9 @@
     },
     "atr_multiplier": {
       "type": "float",
-      "min": 0,
-      "description": "ATR 边界倍数，use_atr_bounds=true 时使用。"
+      "min": 1,
+      "max": 5,
+      "description": "ATR 边界倍数，use_atr_bounds=true 时使用，手动页面范围 1～5，步进 0.5。"
     },
     "enable_direction_adjust": {
       "type": "bool",
@@ -156,26 +163,27 @@
     },
     "direction_bias_ratio": {
       "type": "float",
-      "min": 0,
-      "description": "方向偏置比例，决定多空倾向强弱。"
+      "min": 0.55,
+      "max": 0.9,
+      "description": "方向偏置比例，决定多空倾向强弱；手动页面范围 0.55～0.90，通常以 55%～90% 展示。"
     },
     "max_drawdown_pct": {
       "type": "float",
-      "min": 0,
-      "max": 100,
-      "description": "最大回撤百分比止损，范围 0～100。"
+      "min": 5,
+      "max": 50,
+      "description": "网格策略最大回撤百分比，手动页面范围 5～50。"
     },
     "stop_loss_pct": {
       "type": "float",
-      "min": 0,
-      "max": 100,
-      "description": "止损百分比，范围 0～100。"
+      "min": 1,
+      "max": 20,
+      "description": "网格策略止损百分比，手动页面范围 1～20。"
     },
     "daily_loss_limit_pct": {
       "type": "float",
-      "min": 0,
-      "max": 100,
-      "description": "每日最大亏损比例，达到后当天停止新开仓。"
+      "min": 1,
+      "max": 30,
+      "description": "网格策略每日最大亏损比例，手动页面范围 1～30，达到后当天停止新开仓。"
     },
     "use_maker_only": {
       "type": "bool",
@@ -190,7 +198,8 @@
     "ai500_limit": {
       "type": "int",
       "min": 1,
-      "description": "AI500 榜单选取数量。"
+      "max": 10,
+      "description": "AI500 榜单选取数量，手动页面范围 1～10。"
     },
     "use_oi_top": {
       "type": "bool",
@@ -200,7 +209,8 @@
     "oi_top_limit": {
       "type": "int",
       "min": 1,
-      "description": "OI Top 选取数量。"
+      "max": 10,
+      "description": "OI Top 选取数量，手动页面范围 1～10。"
     },
     "use_oi_low": {
       "type": "bool",
@@ -210,12 +220,14 @@
     "oi_low_limit": {
       "type": "int",
       "min": 1,
-      "description": "OI Low 选取数量。"
+      "max": 10,
+      "description": "OI Low 选取数量，手动页面范围 1～10。"
     },
     "primary_count": {
       "type": "int",
-      "min": 1,
-      "description": "主周期样本数量。"
+      "min": 10,
+      "max": 30,
+      "description": "主周期 K 线样本数量，手动页面范围 10～30。"
     },
     "enable_ema": {
       "type": "bool",
@@ -298,13 +310,15 @@
       "description": "是否启用 OI 排行榜。"
     },
     "oi_ranking_duration": {
-      "type": "string",
-      "description": "OI 排行榜统计周期。"
+      "type": "enum",
+      "values": ["1h", "4h", "24h"],
+      "description": "OI 排行榜统计周期，页面选项为 1h、4h、24h。"
     },
     "oi_ranking_limit": {
       "type": "int",
-      "min": 1,
-      "description": "OI 排行榜返回数量。"
+      "min": 5,
+      "max": 20,
+      "description": "OI 排行榜返回数量，页面选项为 5、10、15、20。"
     },
     "enable_netflow_ranking": {
       "type": "bool",
@@ -312,13 +326,15 @@
       "description": "是否启用净流入排行榜。"
     },
     "netflow_ranking_duration": {
-      "type": "string",
-      "description": "净流入排行榜统计周期。"
+      "type": "enum",
+      "values": ["1h", "4h", "24h"],
+      "description": "净流入排行榜统计周期，页面选项为 1h、4h、24h。"
     },
     "netflow_ranking_limit": {
       "type": "int",
-      "min": 1,
-      "description": "净流入排行榜返回数量。"
+      "min": 5,
+      "max": 20,
+      "description": "净流入排行榜返回数量，页面选项为 5、10、15、20。"
     },
     "enable_price_ranking": {
       "type": "bool",
@@ -326,42 +342,52 @@
       "description": "是否启用价格波动排行榜。"
     },
     "price_ranking_duration": {
-      "type": "string",
-      "description": "价格排行榜统计周期。"
+      "type": "enum",
+      "values": ["1h", "4h", "24h", "1h,4h,24h"],
+      "description": "价格排行榜统计周期，页面选项为 1h、4h、24h、1h,4h,24h。"
     },
     "price_ranking_limit": {
       "type": "int",
-      "min": 1,
-      "description": "价格排行榜返回数量。"
+      "min": 5,
+      "max": 20,
+      "description": "价格排行榜返回数量，页面选项为 5、10、15、20。"
     },
     "btceth_max_position_value_ratio": {
       "type": "float",
       "min": 0,
-      "description": "BTC/ETH 单仓最大仓位价值占比。"
+      "description": "BTC/ETH 单仓最大仓位价值占比。策略页展示为 System enforced，不是普通手动可编辑项；除非用户明确要求高级配置，否则不要主动修改。"
     },
     "altcoin_max_position_value_ratio": {
       "type": "float",
       "min": 0,
-      "description": "山寨币单仓最大仓位价值占比。"
+      "description": "山寨币单仓最大仓位价值占比。策略页展示为 System enforced，不是普通手动可编辑项；除非用户明确要求高级配置，否则不要主动修改。"
     },
     "max_margin_usage": {
       "type": "float",
       "min": 0,
-      "description": "最大保证金占用比例。"
+      "description": "最大保证金占用比例。策略页展示为 System enforced，不是普通手动可编辑项；除非用户明确要求高级配置，否则不要主动修改。"
     }
   },
   "validation_rules": [
+    "AI 策略页面包含：选币来源、指标/K线/量化数据、风险控制、Prompt Sections、自定义提示词、发布设置。",
+    "网格策略页面包含：symbol、grid_count、total_investment、leverage、upper_price、lower_price、use_atr_bounds、atr_multiplier、distribution、max_drawdown_pct、stop_loss_pct、daily_loss_limit_pct、use_maker_only、enable_direction_adjust、direction_bias_ratio、发布设置。",
+    "用户询问字段有哪些选项、范围或页面能不能设置时，应直接按本 skill 的 field_constraints 回答；不要说“平台会自动匹配”或编造页面不存在的字段。",
+    "grid_trading 的 symbol 只能从页面下拉选项 BTCUSDT、ETHUSDT、SOLUSDT、BNBUSDT、XRPUSDT、DOGEUSDT 中选择。",
+    "grid_trading 的 grid_count 范围为 5～50，total_investment 最小 100，leverage 范围 1～5，atr_multiplier 范围 1～5。",
+    "grid_trading 的 max_drawdown_pct 范围为 5～50，stop_loss_pct 范围为 1～20，daily_loss_limit_pct 范围为 1～30，direction_bias_ratio 范围为 0.55～0.90。",
+    "AI 策略的 static_coins 最多 10 个，selected_timeframes 最多 4 个，primary_count 范围为 10～30。",
+    "排行榜 duration 只能用页面选项；ranking_limit 只能用 5、10、15、20。",
     "btceth_max_leverage 和 altcoin_max_leverage 范围均为 1～20，超出时自动收敛并告知用户。",
-    "grid_trading 的 leverage 需与手动页面一致，范围 1～5，超出时自动收敛并告知用户。",
-    "min_confidence 范围 0～100，超出时自动收敛并告知用户。",
+    "min_confidence 范围 50～100，超出时自动收敛并告知用户。",
     "grid_trading 类型时，lower_price 必须小于 upper_price，否则提示用户修正。",
-    "grid_count 最小为 2，低于 2 时提示用户修正。",
     "策略模板不能直接启动运行，只有绑定了该策略的交易员才能启动。",
+    "策略模板创建成功后应出现在策略列表/策略页。",
+    "创建策略模板时不要要求用户先绑定或添加交易所账户，也不要要求绑定 AI 模型；交易所和模型只属于 trader 创建、部署或启动流程。",
+    "如果用户只是创建或配置策略模板，不要把它升级成 trader 创建流程。",
     "删除操作不可逆，必须先向用户确认再执行。",
     "激活（activate）操作将该策略设为默认模板，不是启动运行。",
     "scan_interval_minutes、initial_balance、lighter_api_key_index 这类交易员/交易所边界值不属于策略本身，若用户在改策略时提到，应引导去对应 trader 或 exchange 配置。",
-    "btceth_max_position_value_ratio、altcoin_max_position_value_ratio、max_margin_usage 等风控字段若越界，应先自动收敛或提示用户确认修正后的值。",
-    "最小开仓金额是系统固定值 12 USDT，Agent 不能修改；若用户要求改这个值，应直接说明这是手动面板中的 System enforced 固定项。",
+    "max_positions、btceth_max_position_value_ratio、altcoin_max_position_value_ratio、max_margin_usage、min_position_size 在策略页属于 System enforced / 非普通手动编辑项；若用户问页面能否改，应说明页面不提供普通编辑入口。min_position_size 固定为 12 USDT，Agent 不能修改。",
     "启用量化数据相关开关时，若需要 nofxos_api_key，应主动提醒用户补齐。",
     "启用排行榜相关能力时，只修改用户明确提到的 enable_*、duration、limit 字段，不要偷偷打开其他排行榜。"
   ],
@@ -374,7 +400,10 @@
       "dynamic_rules": [
         "若用户只是要给 trader 绑定现有策略，应优先在父任务里补 strategy 槽位，而不是误开新的 create。",
         "若用户明确要求新建策略，至少先收齐名称；其他配置可继续追问或按默认值协助补齐。",
-        "策略模板不能直接启动运行；本动作成功后通常返回 strategy_id 供后续 trader 绑定使用。",
+        "创建策略模板本身不需要交易所账户或 AI 模型；不要在 create 策略时询问用户是否已有交易所账户。",
+        "只有当用户明确要求运行、部署、实盘、创建交易员或绑定到交易员时，才进入 trader 流程并收集交易所/模型。",
+        "策略模板创建成功后应出现在策略列表/策略页。",
+        "只有用户要运行或部署时，才继续 trader 绑定。",
         "杠杆超出 1～20 范围时，自动收敛并告知用户。"
       ],
       "success_output": "返回 strategy_id 和新策略摘要（名称、类型、主要配置）。",

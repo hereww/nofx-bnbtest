@@ -373,6 +373,17 @@ func unmarshalStrategyCreateDraft(raw, lang string) store.StrategyConfig {
 
 func strategyCreateConfigFromSession(session skillSession, lang string) (store.StrategyConfig, map[string]any, []string, error) {
 	cfg := unmarshalStrategyCreateDraft(fieldValue(session, strategyCreateDraftConfigField), lang)
+	for _, key := range manualStrategyEditableFieldKeys() {
+		switch key {
+		case "name", "description", "is_public", "config_visible":
+			continue
+		}
+		if value := fieldValue(session, key); strings.TrimSpace(value) != "" {
+			if err := applyStrategyConfigPatch(&cfg, key, value); err != nil {
+				return cfg, nil, nil, err
+			}
+		}
+	}
 	patchRaw := strings.TrimSpace(fieldValue(session, strategyCreateConfigPatchField))
 	var patch map[string]any
 	if patchRaw != "" {
@@ -387,7 +398,25 @@ func strategyCreateConfigFromSession(session skillSession, lang string) (store.S
 	}
 	beforeClamp := cfg
 	cfg.ClampLimits()
-	return cfg, patch, store.StrategyClampWarnings(beforeClamp, cfg, cfg.Language), nil
+	if strings.TrimSpace(cfg.StrategyType) == "" {
+		cfg.StrategyType = "ai_trading"
+	}
+	rawCfg, _ := json.Marshal(cfg)
+	var configMap map[string]any
+	_ = json.Unmarshal(rawCfg, &configMap)
+	removeLockedStrategyCreateFields(configMap)
+	return cfg, configMap, store.StrategyClampWarnings(beforeClamp, cfg, cfg.Language), nil
+}
+
+func removeLockedStrategyCreateFields(configMap map[string]any) {
+	if configMap == nil {
+		return
+	}
+	risk, ok := configMap["risk_control"].(map[string]any)
+	if !ok {
+		return
+	}
+	delete(risk, "min_position_size")
 }
 
 func strategyCreateConfirmationReply(text string) bool {
@@ -398,7 +427,140 @@ func strategyCreateConfirmationReply(text string) bool {
 	return isYesReply(text) || lower == "确认创建" || lower == "创建吧" || lower == "就按这个创建" || lower == "按这个创建" || lower == "确认应用" || lower == "应用" || lower == "就按这个应用"
 }
 
-func formatStrategyCreateDraftSummary(lang, name string, changedFields, warnings []string) string {
+func strategyCreateDefaultConfigReply(text string) bool {
+	lower := strings.ToLower(strings.TrimSpace(text))
+	if lower == "" {
+		return false
+	}
+	return containsAny(lower, []string{
+		"默认", "先创建", "直接创建", "不用配置", "其他默认", "用默认", "按默认", "默认配置",
+		"use default", "use defaults", "default config", "create now", "create directly",
+	})
+}
+
+func explicitStrategyCreateType(session skillSession) string {
+	if value := strings.TrimSpace(fieldValue(session, "strategy_type")); value != "" {
+		return value
+	}
+	patchRaw := strings.TrimSpace(fieldValue(session, strategyCreateConfigPatchField))
+	if patchRaw == "" {
+		return ""
+	}
+	var patch map[string]any
+	if err := json.Unmarshal([]byte(patchRaw), &patch); err != nil {
+		return ""
+	}
+	if value, ok := patch["strategy_type"].(string); ok {
+		return strings.TrimSpace(value)
+	}
+	if gridConfig, ok := patch["grid_config"]; ok && gridConfig != nil {
+		return "grid_trading"
+	}
+	return ""
+}
+
+func strategyCreateConfigReady(session skillSession, cfg store.StrategyConfig, text string) (bool, string) {
+	if strategyCreateDefaultConfigReply(text) {
+		return true, ""
+	}
+	strategyType := explicitStrategyCreateType(session)
+	if !strategyCreateHasExplicitConfigBeyondType(session) {
+		if strategyType == "" {
+			return false, "strategy_type"
+		}
+		return false, strategyType
+	}
+	if strategyType == "" {
+		return false, "strategy_type"
+	}
+	switch strategyType {
+	case "grid_trading":
+		grid := cfg.GridConfig
+		if grid == nil {
+			return false, "grid_trading"
+		}
+		if strings.TrimSpace(grid.Symbol) == "" || grid.GridCount <= 0 || grid.TotalInvestment <= 0 || grid.Leverage <= 0 {
+			return false, "grid_trading"
+		}
+		if !grid.UseATRBounds && (grid.UpperPrice <= 0 || grid.LowerPrice <= 0) {
+			return false, "grid_trading"
+		}
+		return true, ""
+	case "ai_trading":
+		if strings.TrimSpace(cfg.CoinSource.SourceType) == "" || strings.TrimSpace(cfg.Indicators.Klines.PrimaryTimeframe) == "" {
+			return false, "ai_trading"
+		}
+		return true, ""
+	default:
+		return false, "strategy_type"
+	}
+}
+
+func strategyCreateHasExplicitConfigBeyondType(session skillSession) bool {
+	for _, key := range manualStrategyEditableFieldKeys() {
+		switch key {
+		case "name", "description", "is_public", "config_visible", "strategy_type":
+			continue
+		}
+		if strings.TrimSpace(fieldValue(session, key)) != "" {
+			return true
+		}
+	}
+	patchRaw := strings.TrimSpace(fieldValue(session, strategyCreateConfigPatchField))
+	if patchRaw == "" {
+		return false
+	}
+	var patch map[string]any
+	if err := json.Unmarshal([]byte(patchRaw), &patch); err != nil {
+		return true
+	}
+	for key := range patch {
+		if strings.TrimSpace(key) != "" && strings.TrimSpace(key) != "strategy_type" {
+			return true
+		}
+	}
+	return false
+}
+
+func formatStrategyCreateConfigNeeded(lang, strategyType string) string {
+	if lang == "zh" {
+		switch strategyType {
+		case "grid_trading":
+			return strings.Join([]string{
+				"好的，先不创建空模板。网格策略需要先把核心配置补齐，之后我再调用 create 落库。",
+				"需要确认这些配置：",
+				"- 交易对：BTCUSDT、ETHUSDT、SOLUSDT、BNBUSDT、XRPUSDT、DOGEUSDT",
+				"- 网格数量、总投入、杠杆",
+				"- 价格区间：用 ATR 动态边界，或手动给上边界/下边界",
+				"- 网格分布：uniform、gaussian、pyramid",
+				"- 风控：最大回撤、止损、每日亏损限制、是否只挂 maker 单、是否启用方向偏置",
+				"你可以一次性告诉我这些参数；如果想先用默认值，也可以明确说“用默认配置创建”。",
+			}, "\n")
+		case "ai_trading":
+			return strings.Join([]string{
+				"好的，先不创建空模板。AI 策略需要先把核心配置补齐，之后我再调用 create 落库。",
+				"需要确认这些配置：",
+				"- 选币来源：static、ai500、oi_top、oi_low",
+				"- K 线主周期和多周期",
+				"- 风控：杠杆、最小置信度、最小盈亏比",
+				"- 提示词方向：角色定义、交易频率、入场标准、决策流程",
+				"你可以一次性告诉我这些参数；如果想先用默认值，也可以明确说“用默认配置创建”。",
+			}, "\n")
+		default:
+			return "先选择策略类型：grid_trading（网格策略）或 ai_trading（AI 策略）。类型确认后我会继续收集对应配置，配置好后再创建。"
+		}
+	}
+	switch strategyType {
+	case "grid_trading":
+		return "I will not create an empty template yet. For a grid strategy, please provide symbol, grid count, total investment, leverage, boundary mode/prices, distribution, and risk settings. Say “use defaults” if you want the remaining fields defaulted before creation."
+	case "ai_trading":
+		return "I will not create an empty template yet. For an AI strategy, please provide coin source, timeframes, risk settings, and prompt direction. Say “use defaults” if you want the remaining fields defaulted before creation."
+	default:
+		return "Choose the strategy type first: grid_trading or ai_trading. I will collect the matching config before creating it."
+	}
+}
+
+func formatStrategyCreateDraftSummary(lang, name, strategyType string, changedFields, warnings []string) string {
 	name = strings.TrimSpace(name)
 	if name == "" {
 		if lang == "zh" {
@@ -425,7 +587,14 @@ func formatStrategyCreateDraftSummary(lang, name string, changedFields, warnings
 			lines = append(lines, "你可以继续告诉我其他字段怎么设计；如果接受当前安全范围，也可以直接回复“确认创建”。")
 			return strings.Join(lines, "\n")
 		}
-		lines = append(lines, "你可以继续补充其他字段，比如选币来源、最大持仓、置信度、盈亏比、多周期；如果现在就创建，直接回复“确认创建”。")
+		switch strategyType {
+		case "grid_trading":
+			lines = append(lines, "这是网格策略草稿。你可以继续补充交易对、网格数量、总投入、杠杆、价格区间和网格风控；如果想让我按默认值补齐，直接说“用默认配置创建”。")
+		case "ai_trading":
+			lines = append(lines, "这是 AI 策略草稿。你可以继续补充选币来源、时间周期、风险参数和提示词方向；如果想让我按默认值补齐，直接说“用默认配置创建”。")
+		default:
+			lines = append(lines, "你可以继续补充策略类型和对应参数；如果现在就创建，直接回复“确认创建”。")
+		}
 		return strings.Join(lines, "\n")
 	}
 
@@ -446,7 +615,74 @@ func formatStrategyCreateDraftSummary(lang, name string, changedFields, warnings
 		lines = append(lines, "You can keep refining the draft, or reply 'confirm' to create it with the safe adjusted values.")
 		return strings.Join(lines, "\n")
 	}
-	lines = append(lines, "You can keep refining the draft, or reply 'confirm' to create it now.")
+	switch strategyType {
+	case "grid_trading":
+		lines = append(lines, "This is a grid strategy draft. You can keep refining symbol, grid count, total investment, leverage, price bounds, and grid risk settings, or say 'use defaults' before creating it.")
+	case "ai_trading":
+		lines = append(lines, "This is an AI strategy draft. You can keep refining coin source, timeframes, risk settings, and prompt direction, or say 'use defaults' before creating it.")
+	default:
+		lines = append(lines, "You can keep refining the strategy type and matching parameters, or reply 'confirm' to create it now.")
+	}
+	return strings.Join(lines, "\n")
+}
+
+func formatStrategyCreateFinalConfirmation(lang string, session skillSession, cfg store.StrategyConfig) string {
+	name := defaultIfEmpty(fieldValue(session, "name"), "未命名策略")
+	if lang != "zh" {
+		name = defaultIfEmpty(fieldValue(session, "name"), "unnamed strategy")
+	}
+	if lang == "zh" {
+		lines := []string{fmt.Sprintf("我已经把“%s”的配置整理好了，确认后我再创建到策略列表。", name)}
+		switch cfg.StrategyType {
+		case "grid_trading":
+			grid := cfg.GridConfig
+			if grid == nil {
+				grid = &store.GridStrategyConfig{}
+			}
+			lines = append(lines,
+				"- 类型：网格策略",
+				fmt.Sprintf("- 交易对：%s", defaultIfEmpty(grid.Symbol, "未设置")),
+				fmt.Sprintf("- 网格数量：%d", grid.GridCount),
+				fmt.Sprintf("- 总投入：%.2f USDT", grid.TotalInvestment),
+				fmt.Sprintf("- 杠杆：%d倍", grid.Leverage),
+			)
+			if grid.UseATRBounds {
+				lines = append(lines, fmt.Sprintf("- 价格区间：ATR 动态范围（倍数 %.2f）", grid.ATRMultiplier))
+			} else {
+				lines = append(lines, fmt.Sprintf("- 价格区间：%.2f ～ %.2f", grid.LowerPrice, grid.UpperPrice))
+			}
+			lines = append(lines,
+				fmt.Sprintf("- 网格分布：%s", defaultIfEmpty(grid.Distribution, "uniform")),
+				fmt.Sprintf("- 最大回撤：%.2f%%", grid.MaxDrawdownPct),
+				fmt.Sprintf("- 止损：%.2f%%", grid.StopLossPct),
+				fmt.Sprintf("- 日亏损限制：%.2f%%", grid.DailyLossLimitPct),
+			)
+		default:
+			lines = append(lines,
+				"- 类型：AI 策略",
+				fmt.Sprintf("- 选币来源：%s", defaultIfEmpty(cfg.CoinSource.SourceType, "未设置")),
+				fmt.Sprintf("- 主周期：%s", defaultIfEmpty(cfg.Indicators.Klines.PrimaryTimeframe, "未设置")),
+				fmt.Sprintf("- 最小置信度：%d", cfg.RiskControl.MinConfidence),
+				fmt.Sprintf("- 最小盈亏比：%.2f", cfg.RiskControl.MinRiskRewardRatio),
+			)
+		}
+		lines = append(lines, "确认创建的话，直接回复“确认创建”。要调整也可以直接说改哪项。")
+		return strings.Join(lines, "\n")
+	}
+	lines := []string{fmt.Sprintf("I prepared the config for %q. Confirm and I will create it in the strategy list.", name)}
+	if cfg.StrategyType == "grid_trading" && cfg.GridConfig != nil {
+		grid := cfg.GridConfig
+		lines = append(lines,
+			"- Type: grid strategy",
+			fmt.Sprintf("- Symbol: %s", defaultIfEmpty(grid.Symbol, "unset")),
+			fmt.Sprintf("- Grid count: %d", grid.GridCount),
+			fmt.Sprintf("- Total investment: %.2f USDT", grid.TotalInvestment),
+			fmt.Sprintf("- Leverage: %dx", grid.Leverage),
+		)
+	} else {
+		lines = append(lines, "- Type: AI strategy")
+	}
+	lines = append(lines, "Reply 'confirm create' to create it, or tell me what to change.")
 	return strings.Join(lines, "\n")
 }
 
@@ -720,10 +956,6 @@ func formatTraderCreateDraftSummary(lang string, session skillSession) string {
 }
 
 func (a *Agent) continueStrategyCreateDraft(storeUserID string, userID int64, lang, text string, session skillSession) string {
-	if answer, ok := a.answerSkillSessionExplanation(storeUserID, lang, session, text); ok {
-		a.saveSkillSession(userID, session)
-		return answer
-	}
 	name := fieldValue(session, "name")
 	if actionRequiresSlot("strategy_management", "create", "name") && strings.TrimSpace(name) == "" {
 		setSkillDAGStep(&session, "resolve_name")
@@ -732,6 +964,11 @@ func (a *Agent) continueStrategyCreateDraft(storeUserID string, userID int64, la
 			return "要创建策略，我还需要策略名。你可以直接说：创建一个叫“趋势策略A”的策略。"
 		}
 		return "One more thing: give this strategy a name."
+	}
+	if fieldValue(session, "strategy_type") == "" {
+		if strategyType := parseStrategyTypeValue(text); strategyType != "" {
+			setField(&session, "strategy_type", strategyType)
+		}
 	}
 
 	cfg := unmarshalStrategyCreateDraft(fieldValue(session, strategyCreateDraftConfigField), lang)
@@ -748,6 +985,10 @@ func (a *Agent) continueStrategyCreateDraft(storeUserID string, userID int64, la
 	session.Phase = "draft_create"
 
 	if strategyCreateConfirmationReply(text) {
+		if ready, missingKind := strategyCreateConfigReady(session, cfg, text); !ready {
+			a.saveSkillSession(userID, session)
+			return formatStrategyCreateConfigNeeded(lang, missingKind)
+		}
 		args := map[string]any{
 			"action": "create",
 			"name":   name,
@@ -775,7 +1016,7 @@ func (a *Agent) continueStrategyCreateDraft(storeUserID string, userID int64, la
 	}
 
 	a.saveSkillSession(userID, session)
-	return formatStrategyCreateDraftSummary(lang, name, changedFields, warnings)
+	return formatStrategyCreateDraftSummary(lang, name, explicitStrategyCreateType(session), changedFields, warnings)
 }
 
 func hasExplicitStrategyDetailIntent(text string) bool {
@@ -1615,13 +1856,25 @@ func (a *Agent) handleStrategyCreateSkill(storeUserID string, userID int64, lang
 		}
 		return "To create a strategy, I need a strategy name. You can say: create a strategy called 'Trend A'."
 	}
-	_, patch, warnings, cfgErr := strategyCreateConfigFromSession(session, lang)
+	if fieldValue(session, "strategy_type") == "" {
+		if strategyType := parseStrategyTypeValue(text); strategyType != "" {
+			setField(&session, "strategy_type", strategyType)
+		}
+	}
+	cfg, configMap, warnings, cfgErr := strategyCreateConfigFromSession(session, lang)
 	if cfgErr != nil {
 		a.saveSkillSession(userID, session)
 		if lang == "zh" {
 			return "创建策略失败：" + cfgErr.Error()
 		}
 		return "That strategy config could not be prepared: " + cfgErr.Error()
+	}
+	if ready, missingKind := strategyCreateConfigReady(session, cfg, text); !ready {
+		setField(&session, strategyCreateDraftConfigField, marshalStrategyCreateDraft(cfg))
+		setSkillDAGStep(&session, "collect_config")
+		session.Phase = "draft_create"
+		a.saveSkillSession(userID, session)
+		return formatStrategyCreateConfigNeeded(lang, missingKind)
 	}
 
 	setSkillDAGStep(&session, "execute_create")
@@ -1631,8 +1884,8 @@ func (a *Agent) handleStrategyCreateSkill(storeUserID string, userID int64, lang
 		"lang":                 defaultIfEmpty(lang, "zh"),
 		"allow_clamped_update": true,
 	}
-	if len(patch) > 0 {
-		args["config"] = patch
+	if len(configMap) > 0 {
+		args["config"] = configMap
 	}
 	raw, _ := json.Marshal(args)
 	resp := a.toolManageStrategy(storeUserID, string(raw))

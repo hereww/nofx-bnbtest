@@ -114,6 +114,11 @@ func buildSkillDomainPrimer(lang, skillName string) string {
 				"- source_type 是选币来源，不是交易所，也不是模型。",
 				"- strategy_type 选项：ai_trading、grid_trading。",
 				"- source_type 选项：static、ai500、oi_top、oi_low、mixed。",
+				"- grid_trading 页面交易对选项：BTCUSDT、ETHUSDT、SOLUSDT、BNBUSDT、XRPUSDT、DOGEUSDT。",
+				"- grid_trading 页面范围：grid_count 5～50、total_investment 最小 100、leverage 1～5、atr_multiplier 1～5、max_drawdown_pct 5～50、stop_loss_pct 1～20、daily_loss_limit_pct 1～30、direction_bias_ratio 0.55～0.90。",
+				"- ai_trading 页面范围：static_coins 最多 10 个、selected_timeframes 最多 4 个、primary_count 10～30、min_confidence 50～100、min_risk_reward_ratio 1～10。",
+				"- 排行榜页面选项：duration 为 1h/4h/24h（价格榜还支持 1h,4h,24h），limit 为 5/10/15/20。",
+				"- max_positions、仓位价值占比、max_margin_usage、min_position_size 在策略页属于 System enforced / 非普通手动编辑项。",
 				"- 关键字段：" + strings.Join(fields, "、"),
 			}, "\n")
 		}
@@ -123,6 +128,11 @@ func buildSkillDomainPrimer(lang, skillName string) string {
 			"- source_type means the coin source, not an exchange or model.",
 			"- strategy_type options: ai_trading, grid_trading.",
 			"- source_type options: static, ai500, oi_top, oi_low, mixed.",
+			"- grid_trading symbol dropdown: BTCUSDT, ETHUSDT, SOLUSDT, BNBUSDT, XRPUSDT, DOGEUSDT.",
+			"- grid_trading page ranges: grid_count 5-50, total_investment >=100, leverage 1-5, atr_multiplier 1-5, max_drawdown_pct 5-50, stop_loss_pct 1-20, daily_loss_limit_pct 1-30, direction_bias_ratio 0.55-0.90.",
+			"- ai_trading page ranges: static_coins at most 10, selected_timeframes at most 4, primary_count 10-30, min_confidence 50-100, min_risk_reward_ratio 1-10.",
+			"- Ranking page options: duration 1h/4h/24h (price ranking also supports 1h,4h,24h), limit 5/10/15/20.",
+			"- max_positions, position value ratios, max_margin_usage, and min_position_size are System enforced / not ordinary manual fields on the strategy page.",
 			"- Key fields: " + strings.Join(fields, ", "),
 		}, "\n")
 	default:

@@ -260,16 +260,6 @@ func (a *Agent) executeBrainDecision(ctx context.Context, storeUserID string, us
 }
 
 func (a *Agent) driveActiveSession(ctx context.Context, storeUserID string, userID int64, lang, text string, session ActiveSkillSession, onEvent func(event, data string)) (string, bool, error) {
-	if answer, ok := a.answerSkillSessionExplanation(storeUserID, lang, activeToLegacySkillSession(session), text); ok {
-		session = appendActiveSessionLocalHistory(session, "user", text)
-		session = appendActiveSessionLocalHistory(session, "assistant", answer)
-		setActiveSessionPendingHint(&session, answer)
-		a.saveActiveSkillSession(session)
-		emitBrainReply(onEvent, answer)
-		a.recordSkillInteraction(userID, text, answer)
-		return answer, true, nil
-	}
-
 	session = appendActiveSessionLocalHistory(session, "user", text)
 	clearActiveSessionPendingHint(&session)
 
@@ -286,7 +276,6 @@ func (a *Agent) driveActiveSession(ctx context.Context, storeUserID string, user
 			stepDecision.Route = "execute_skill"
 		}
 	}
-
 	switch stepDecision.Route {
 	case "cancel_task":
 		a.clearActiveSkillSession(userID)
@@ -299,8 +288,16 @@ func (a *Agent) driveActiveSession(ctx context.Context, storeUserID string, user
 		return reply, true, nil
 
 	case "finish_task":
-		a.clearActiveSkillSession(userID)
 		reply := strings.TrimSpace(stepDecision.Reply)
+		if guarded, blocked := guardUnexecutedActiveTaskCompletion(lang, session, reply); blocked {
+			session = appendActiveSessionLocalHistory(session, "assistant", guarded)
+			setActiveSessionPendingHint(&session, guarded)
+			a.saveActiveSkillSession(session)
+			emitBrainReply(onEvent, guarded)
+			a.recordSkillInteraction(userID, text, guarded)
+			return guarded, true, nil
+		}
+		a.clearActiveSkillSession(userID)
 		if reply == "" {
 			return "", false, nil
 		}
@@ -325,6 +322,27 @@ func (a *Agent) driveActiveSession(ctx context.Context, storeUserID string, user
 		return reply, true, nil
 
 	case "execute_skill":
+		var repairReply string
+		var canExecute bool
+		session, repairReply, canExecute = a.ensureStrategyCreateExecutableState(ctx, lang, text, session)
+		if !canExecute {
+			repairReply = defaultIfEmpty(repairReply, a.askForMissingFields(lang, session))
+			session = appendActiveSessionLocalHistory(session, "assistant", repairReply)
+			setActiveSessionPendingHint(&session, repairReply)
+			a.saveActiveSkillSession(session)
+			emitBrainReply(onEvent, repairReply)
+			a.recordSkillInteraction(userID, text, repairReply)
+			return repairReply, true, nil
+		}
+		if guarded, blocked := guardStrategyCreateBeforeFinalConfirmation(lang, session); blocked {
+			session.CollectedFields["awaiting_final_confirmation"] = true
+			session = appendActiveSessionLocalHistory(session, "assistant", guarded)
+			setActiveSessionPendingHint(&session, guarded)
+			a.saveActiveSkillSession(session)
+			emitBrainReply(onEvent, guarded)
+			a.recordSkillInteraction(userID, text, guarded)
+			return guarded, true, nil
+		}
 		outcome, nextSession, pending, ok := a.executeActiveSkillSession(storeUserID, userID, lang, text, session)
 		if !ok {
 			return "", false, nil
@@ -364,6 +382,174 @@ func (a *Agent) driveActiveSession(ctx context.Context, storeUserID string, user
 	default:
 		return "", false, nil
 	}
+}
+
+func (a *Agent) ensureStrategyCreateExecutableState(ctx context.Context, lang, text string, session ActiveSkillSession) (ActiveSkillSession, string, bool) {
+	if session.SkillName != "strategy_management" || session.ActionName != "create" {
+		return session, "", true
+	}
+	if strategyCreateSessionReady(lang, session) {
+		return session, "", true
+	}
+	if a.aiClient == nil {
+		return session, "", true
+	}
+
+	legacy := activeToLegacySkillSession(session)
+	collectedJSON, _ := json.Marshal(session.CollectedFields)
+	fieldSpecsJSON, _ := json.Marshal(allowedFieldSpecsForSkillSession(legacy, lang))
+	history := formatActiveSessionLocalHistory(session.LocalHistory)
+	if history == "" {
+		history = "(empty)"
+	}
+	systemPrompt := prependNOFXiAdvisorPreamble(`You repair structured state for one active NOFXi strategy creation task.
+Return JSON only.
+
+Rules:
+- Think from the current user message, previous assistant proposal, and active history.
+- If concrete strategy settings can be determined, write them into extracted_data.config_patch as a StrategyConfig-shaped JSON patch.
+- If the previous assistant already asked the user to confirm a concrete creation proposal and the current user confirms it, set extracted_data.awaiting_final_confirmation=true too.
+- If the user is asking you to design settings but has not confirmed creation yet, use route ask_user, provide a concise final confirmation reply, and include the designed config in extracted_data.config_patch plus extracted_data.awaiting_final_confirmation=true.
+- Do not claim the strategy was created. This step only repairs state or asks for more information.
+- If there is not enough information to determine a config, ask one natural follow-up question.
+
+Return shape:
+{"route":"ready|ask_user","reply":"","extracted_data":{}}`)
+	userPrompt := fmt.Sprintf("Language: %s\nCurrent user message: %s\n\nCurrent collected fields JSON:\n%s\n\nAllowed field spec JSON:\n%s\n\nActive task history:\n%s", lang, text, string(collectedJSON), string(fieldSpecsJSON), history)
+
+	stageCtx, cancel := withPlannerStageTimeout(ctx, directReplyTimeout)
+	defer cancel()
+	raw, err := a.aiClient.CallWithRequest(&mcp.Request{
+		Messages: []mcp.Message{
+			mcp.NewSystemMessage(systemPrompt),
+			mcp.NewUserMessage(userPrompt),
+		},
+		Ctx: stageCtx,
+	})
+	if err != nil {
+		return session, "", false
+	}
+	decision, ok := parseStrategyCreateStateRepairDecision(raw)
+	if !ok {
+		return session, "", false
+	}
+	decision.ExtractedData = filterExtractedDataForActiveSession(session, decision.ExtractedData, lang)
+	mergeExtractedData(&session, decision.ExtractedData)
+	if decision.Route == "ask_user" {
+		return session, strings.TrimSpace(decision.Reply), false
+	}
+	if strategyCreateSessionReady(lang, session) {
+		return session, strings.TrimSpace(decision.Reply), true
+	}
+	return session, strings.TrimSpace(decision.Reply), false
+}
+
+type strategyCreateStateRepairDecision struct {
+	Route         string         `json:"route"`
+	Reply         string         `json:"reply,omitempty"`
+	ExtractedData map[string]any `json:"extracted_data,omitempty"`
+}
+
+func parseStrategyCreateStateRepairDecision(raw string) (strategyCreateStateRepairDecision, bool) {
+	raw = strings.TrimSpace(raw)
+	raw = strings.TrimPrefix(raw, "```json")
+	raw = strings.TrimPrefix(raw, "```")
+	raw = strings.TrimSuffix(raw, "```")
+	raw = strings.TrimSpace(raw)
+	var d strategyCreateStateRepairDecision
+	if err := json.Unmarshal([]byte(raw), &d); err != nil {
+		start := strings.Index(raw, "{")
+		end := strings.LastIndex(raw, "}")
+		if start < 0 || end <= start {
+			return strategyCreateStateRepairDecision{}, false
+		}
+		if err := json.Unmarshal([]byte(raw[start:end+1]), &d); err != nil {
+			return strategyCreateStateRepairDecision{}, false
+		}
+	}
+	d.Route = strings.ToLower(strings.TrimSpace(d.Route))
+	d.Reply = strings.TrimSpace(d.Reply)
+	switch d.Route {
+	case "ready", "ask_user":
+		return d, true
+	default:
+		return strategyCreateStateRepairDecision{}, false
+	}
+}
+
+func strategyCreateSessionReady(lang string, session ActiveSkillSession) bool {
+	legacy := activeToLegacySkillSession(session)
+	cfg, _, _, err := strategyCreateConfigFromSession(legacy, lang)
+	if err != nil {
+		return false
+	}
+	ready, _ := strategyCreateConfigReady(legacy, cfg, "")
+	return ready
+}
+
+func guardStrategyCreateBeforeFinalConfirmation(lang string, session ActiveSkillSession) (string, bool) {
+	if session.SkillName != "strategy_management" || session.ActionName != "create" {
+		return "", false
+	}
+	if activeFieldBool(session.CollectedFields["awaiting_final_confirmation"]) {
+		return "", false
+	}
+	legacy := activeToLegacySkillSession(session)
+	cfg, _, _, err := strategyCreateConfigFromSession(legacy, lang)
+	if err != nil {
+		return "", false
+	}
+	if ready, _ := strategyCreateConfigReady(legacy, cfg, ""); !ready {
+		return "", false
+	}
+	return formatStrategyCreateFinalConfirmation(lang, legacy, cfg), true
+}
+
+func activeFieldBool(v any) bool {
+	switch typed := v.(type) {
+	case bool:
+		return typed
+	case string:
+		return strings.EqualFold(strings.TrimSpace(typed), "true")
+	default:
+		return false
+	}
+}
+
+func guardUnexecutedActiveTaskCompletion(lang string, session ActiveSkillSession, reply string) (string, bool) {
+	if !isMutatingActiveTask(session) || !looksLikeCompletionClaim(reply) {
+		return "", false
+	}
+	if lang == "zh" {
+		if session.SkillName == "strategy_management" {
+			return "还没有真正创建到策略列表里。刚才只是整理/确认配置方案；需要继续的话，我会先用结构化配置调用策略创建工具，再基于真实结果回复。", true
+		}
+		return "还没有真正执行完成。刚才只是继续当前配置流程；需要实际执行时，我会调用对应工具后再基于真实结果回复。", true
+	}
+	return "It has not actually been executed yet. The previous step only prepared or confirmed the draft; I need to run the structured tool before claiming completion.", true
+}
+
+func isMutatingActiveTask(session ActiveSkillSession) bool {
+	if strings.TrimSpace(session.SkillName) == "" {
+		return false
+	}
+	switch strings.TrimSpace(session.ActionName) {
+	case "create", "update", "update_name", "update_bindings", "configure_strategy", "configure_exchange", "configure_model", "update_status", "update_endpoint", "update_config", "update_prompt", "delete", "start", "stop", "activate", "duplicate":
+		return true
+	default:
+		return false
+	}
+}
+
+func looksLikeCompletionClaim(reply string) bool {
+	lower := strings.ToLower(strings.TrimSpace(reply))
+	if lower == "" {
+		return false
+	}
+	return containsAny(lower, []string{
+		"已创建", "创建好了", "创建好", "已经创建", "已更新", "更新好了", "已修改", "已删除", "已启动", "已停止", "已激活", "已复制", "已经完成", "已完成",
+		"created", "has been created", "updated", "deleted", "started", "stopped", "activated", "duplicated", "completed",
+	})
 }
 
 func (a *Agent) planActiveSessionStep(ctx context.Context, storeUserID string, userID int64, lang, text string, session ActiveSkillSession) (activeSessionStepDecision, bool) {
@@ -415,12 +601,21 @@ Rules:
 - Use contextual memory from the active task history and current references.
 - Prefer "execute_skill" when the user has already given enough information to act.
 - Prefer "ask_user" only when something truly necessary is still missing.
+- For strategy_management:create/update_config: every turn, reason about whether any config fields can now be determined from the user's message and conversation history. If yes, write them into extracted_data.config_patch.
+- For strategy_management:create: when the user asks you to design/recommend settings, think as the strategy designer, produce a concrete recommended config in your reply, and also put the same structured config into extracted_data.config_patch. Do not ask the user to fill fields you can reasonably choose for them.
+- For strategy_management:create: once the structured config is sufficient to create, ask for one final confirmation and set extracted_data.awaiting_final_confirmation=true. Do not execute create in that same turn.
+- For strategy_management:create: choose execute_skill only when awaiting_final_confirmation is already true and the current user message confirms the final summary. If the user changes a number, update config_patch and ask for final confirmation again.
+- Never choose finish_task for an unfinished mutating active task by claiming it was created/updated/deleted/started/stopped. Only a real skill/tool execution outcome can support that claim.
+- If the user says they do not understand the current form, choices, or required information, choose "ask_user" and explain the current pending question in plain language before asking the next easiest question. Cover the relevant concepts from the previous assistant reply; do not collapse the answer to only the first missing field.
+- For beginner/confusion replies, give a safe recommended path when the domain supports one, but do not execute or create anything unless the user confirms after the explanation.
 - If the current message is only a greeting, thanks, acknowledgement, or small talk and does not add task information, do NOT continue task execution. Choose "ask_user" only if you need to gently restate what is pending; otherwise choose "finish_task" with a short social reply.
 - Ask naturally. Do not say raw slot names like target_ref unless the user explicitly asks for internal details.
 - If the user clearly means a bulk destructive operation like "删除所有策略", "全部删除策略", "all strategies", set extracted_data to {"bulk_scope":"all"} and choose "execute_skill". Do not ask for target_ref.
 - If the user refers to a specific object from disclosed targets, set target_ref_id and target_ref_name when you can resolve it.
 - Current references are context for reasoning only. Do not copy a current reference into target_ref_id/target_ref_name unless the user explicitly refers to that object by name/id or clearly says "this/current/that previous one". If the target is not clear, ask instead of executing.
 - For trader bindings, exchange/model/strategy must resolve to an ID from Relevant disclosed resources before execution. Never invent a resource name or use a generic venue type like Binance/OKX as the bound exchange unless it appears as an actual disclosed resource.
+- For strategy_management:create, do not ask for exchange accounts or model bindings. Strategy templates are independent drafts/configs; exchange/model are only needed when creating, deploying, or starting a trader.
+- Strategy templates should be visible in the strategy list/page after creation. Do not bring up trader/model/exchange binding unless the user asks to run or deploy.
 - For strategy_management:create or strategy_management:update_config, when the user describes strategy intent, output config_patch as a partial StrategyConfig JSON object instead of leaving the default template unchanged. Example: "BTC趋势做空" should set coin_source to static BTCUSDT and add prompt/risk/entry rules for BTC trend-following short bias.
 - If there are multiple targets and the user did not disambiguate, ask a natural question with the available names.
 - If the current user message answers a missing field directly, extract it and continue.
@@ -623,7 +818,15 @@ func (a *Agent) buildActiveSessionResources(storeUserID string, session skillSes
 	case "model_management":
 		return a.buildSimpleEntityConversationResources(storeUserID, session, a.loadEnabledModelOptions(storeUserID))
 	case "strategy_management":
-		return a.buildSimpleEntityConversationResources(storeUserID, session, a.loadStrategyOptions(storeUserID))
+		resources := a.buildSimpleEntityConversationResources(storeUserID, session, a.loadStrategyOptions(storeUserID))
+		if strategyType := explicitStrategyCreateType(session); strategyType != "" {
+			resources["current_strategy_type"] = strategyType
+			resources["current_editable_fields"] = manualStrategyEditableFieldKeysForType(strategyType)
+		} else if strategyType, ok := a.strategyTypeForTarget(storeUserID, session.TargetRef); ok {
+			resources["target_strategy_type"] = strategyType
+			resources["target_editable_fields"] = manualStrategyEditableFieldKeysForType(strategyType)
+		}
+		return resources
 	default:
 		return nil
 	}

@@ -161,125 +161,6 @@ func looksLikeStrategyMutationIntent(text string) bool {
 		containsAny(lower, []string{"创建", "新建", "创一个", "创个", "建一个", "修改", "更新", "编辑", "调整", "配置", "create", "new", "update", "edit", "configure"})
 }
 
-type strategyConfigPatchValidation struct {
-	Config            map[string]any
-	ChangedFields     []string
-	UnchangedDefaults []string
-	RejectedFields    []string
-}
-
-func validateStrategyConfigPatch(config map[string]any) strategyConfigPatchValidation {
-	out := strategyConfigPatchValidation{
-		Config: map[string]any{},
-	}
-	if len(config) == 0 {
-		out.UnchangedDefaults = defaultStrategyConfigSections()
-		return out
-	}
-	schema := strategyConfigSchema()
-	props, _ := schema["properties"].(map[string]any)
-	for key, value := range config {
-		key = strings.TrimSpace(key)
-		if key == "" {
-			continue
-		}
-		prop, ok := props[key]
-		if !ok {
-			out.RejectedFields = append(out.RejectedFields, key+" (not in current strategy config)")
-			continue
-		}
-		cleaned, changed, rejected := sanitizeStrategyConfigValue(key, value, prop)
-		out.RejectedFields = append(out.RejectedFields, rejected...)
-		if len(changed) == 0 {
-			continue
-		}
-		out.Config[key] = cleaned
-		out.ChangedFields = append(out.ChangedFields, changed...)
-	}
-	out.UnchangedDefaults = unchangedStrategyDefaults(out.ChangedFields)
-	sort.Strings(out.ChangedFields)
-	sort.Strings(out.UnchangedDefaults)
-	sort.Strings(out.RejectedFields)
-	return out
-}
-
-func sanitizeStrategyConfigValue(path string, value any, schema any) (any, []string, []string) {
-	schemaMap, _ := schema.(map[string]any)
-	if schemaMap == nil {
-		return value, []string{path}, nil
-	}
-	if strings.EqualFold(strings.TrimSpace(fmt.Sprint(schemaMap["type"])), "object") {
-		props, _ := schemaMap["properties"].(map[string]any)
-		if len(props) == 0 {
-			return value, []string{path}, nil
-		}
-		valueMap, ok := value.(map[string]any)
-		if !ok {
-			if typed, ok := value.(map[string]string); ok {
-				valueMap = make(map[string]any, len(typed))
-				for k, v := range typed {
-					valueMap[k] = v
-				}
-				ok = true
-			}
-		}
-		if !ok {
-			return nil, nil, []string{path + " (expected object)"}
-		}
-		out := make(map[string]any, len(valueMap))
-		var changed []string
-		var rejected []string
-		for key, nestedValue := range valueMap {
-			key = strings.TrimSpace(key)
-			if key == "" {
-				continue
-			}
-			nestedPath := path + "." + key
-			prop, ok := props[key]
-			if !ok {
-				rejected = append(rejected, nestedPath+" (not in current strategy config)")
-				continue
-			}
-			cleaned, nestedChanged, nestedRejected := sanitizeStrategyConfigValue(nestedPath, nestedValue, prop)
-			rejected = append(rejected, nestedRejected...)
-			if len(nestedChanged) == 0 {
-				continue
-			}
-			out[key] = cleaned
-			changed = append(changed, nestedChanged...)
-		}
-		if len(out) == 0 {
-			return nil, nil, rejected
-		}
-		return out, changed, rejected
-	}
-	return value, []string{path}, nil
-}
-
-func defaultStrategyConfigSections() []string {
-	return []string{"strategy_type", "language", "coin_source", "indicators", "custom_prompt", "risk_control", "prompt_sections", "grid_config"}
-}
-
-func unchangedStrategyDefaults(changedFields []string) []string {
-	changedTop := make(map[string]bool, len(changedFields))
-	for _, field := range changedFields {
-		top := strings.TrimSpace(field)
-		if idx := strings.Index(top, "."); idx >= 0 {
-			top = top[:idx]
-		}
-		if top != "" {
-			changedTop[top] = true
-		}
-	}
-	out := make([]string, 0, len(defaultStrategyConfigSections()))
-	for _, section := range defaultStrategyConfigSections() {
-		if !changedTop[section] {
-			out = append(out, section)
-		}
-	}
-	return out
-}
-
 func normalizedEntityName(value string) string {
 	return strings.ToLower(strings.TrimSpace(value))
 }
@@ -390,20 +271,20 @@ func strategyConfigSchema() map[string]any {
 		"type":        "object",
 		"description": "Full or partial strategy config. Only include the fields you want to create or update.",
 		"properties": map[string]any{
-			"strategy_type": map[string]any{"type": "string", "enum": []string{"ai_trading", "grid_trading"}},
+			"strategy_type": map[string]any{"type": "string", "enum": []string{"ai_trading", "grid_trading"}, "description": "ai_trading uses coin source, indicators, risk_control, and prompts. grid_trading uses grid_config and publish settings."},
 			"language":      map[string]any{"type": "string", "enum": []string{"zh", "en"}},
 			"coin_source": map[string]any{
 				"type": "object",
 				"properties": map[string]any{
-					"source_type":      map[string]any{"type": "string", "enum": []string{"static", "ai500", "oi_top", "oi_low", "mixed"}},
-					"static_coins":     stringArraySchema("Static coin symbols such as BTCUSDT or ETHUSDT."),
+					"source_type":      map[string]any{"type": "string", "enum": []string{"static", "ai500", "oi_top", "oi_low", "mixed"}, "description": "Manual page coin source: static, ai500, oi_top, oi_low; mixed can be displayed when already configured."},
+					"static_coins":     stringArraySchema("Static coin symbols such as BTCUSDT or ETHUSDT. Manual page allows at most 10. xyz: assets such as xyz:TSLA, xyz:GOLD, xyz:XYZ100 are also supported."),
 					"excluded_coins":   stringArraySchema("Coin symbols to exclude from all sources."),
 					"use_ai500":        map[string]any{"type": "boolean"},
-					"ai500_limit":      map[string]any{"type": "number"},
+					"ai500_limit":      map[string]any{"type": "number", "minimum": 1, "maximum": 10, "description": "Manual page range 1-10."},
 					"use_oi_top":       map[string]any{"type": "boolean"},
-					"oi_top_limit":     map[string]any{"type": "number"},
+					"oi_top_limit":     map[string]any{"type": "number", "minimum": 1, "maximum": 10, "description": "Manual page range 1-10."},
 					"use_oi_low":       map[string]any{"type": "boolean"},
-					"oi_low_limit":     map[string]any{"type": "number"},
+					"oi_low_limit":     map[string]any{"type": "number", "minimum": 1, "maximum": 10, "description": "Manual page range 1-10."},
 					"use_hyper_all":    map[string]any{"type": "boolean"},
 					"use_hyper_main":   map[string]any{"type": "boolean"},
 					"hyper_main_limit": map[string]any{"type": "number"},
@@ -415,12 +296,12 @@ func strategyConfigSchema() map[string]any {
 					"klines": map[string]any{
 						"type": "object",
 						"properties": map[string]any{
-							"primary_timeframe":      map[string]any{"type": "string"},
-							"primary_count":          map[string]any{"type": "number"},
+							"primary_timeframe":      map[string]any{"type": "string", "enum": []string{"1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "6h", "8h", "12h", "1d", "3d", "1w"}},
+							"primary_count":          map[string]any{"type": "number", "minimum": 10, "maximum": 30, "description": "Manual page range 10-30."},
 							"longer_timeframe":       map[string]any{"type": "string"},
 							"longer_count":           map[string]any{"type": "number"},
 							"enable_multi_timeframe": map[string]any{"type": "boolean"},
-							"selected_timeframes":    stringArraySchema("Selected analysis timeframes, e.g. 5m,15m,1h."),
+							"selected_timeframes":    stringArraySchema("Selected analysis timeframes. Allowed values: 1m,3m,5m,15m,30m,1h,2h,4h,6h,8h,12h,1d,3d,1w. Manual page allows at most 4."),
 						},
 					},
 					"enable_raw_klines":        map[string]any{"type": "boolean"},
@@ -441,28 +322,28 @@ func strategyConfigSchema() map[string]any {
 					"enable_quant_oi":          map[string]any{"type": "boolean"},
 					"enable_quant_netflow":     map[string]any{"type": "boolean"},
 					"enable_oi_ranking":        map[string]any{"type": "boolean"},
-					"oi_ranking_duration":      map[string]any{"type": "string"},
-					"oi_ranking_limit":         map[string]any{"type": "number"},
+					"oi_ranking_duration":      map[string]any{"type": "string", "enum": []string{"1h", "4h", "24h"}},
+					"oi_ranking_limit":         map[string]any{"type": "number", "enum": []int{5, 10, 15, 20}},
 					"enable_netflow_ranking":   map[string]any{"type": "boolean"},
-					"netflow_ranking_duration": map[string]any{"type": "string"},
-					"netflow_ranking_limit":    map[string]any{"type": "number"},
+					"netflow_ranking_duration": map[string]any{"type": "string", "enum": []string{"1h", "4h", "24h"}},
+					"netflow_ranking_limit":    map[string]any{"type": "number", "enum": []int{5, 10, 15, 20}},
 					"enable_price_ranking":     map[string]any{"type": "boolean"},
-					"price_ranking_duration":   map[string]any{"type": "string"},
-					"price_ranking_limit":      map[string]any{"type": "number"},
+					"price_ranking_duration":   map[string]any{"type": "string", "enum": []string{"1h", "4h", "24h", "1h,4h,24h"}},
+					"price_ranking_limit":      map[string]any{"type": "number", "enum": []int{5, 10, 15, 20}},
 				},
 			},
 			"custom_prompt": map[string]any{"type": "string"},
 			"risk_control": map[string]any{
 				"type": "object",
 				"properties": map[string]any{
-					"max_positions":                    map[string]any{"type": "number"},
-					"btc_eth_max_leverage":             map[string]any{"type": "number"},
-					"altcoin_max_leverage":             map[string]any{"type": "number"},
-					"btc_eth_max_position_value_ratio": map[string]any{"type": "number"},
-					"altcoin_max_position_value_ratio": map[string]any{"type": "number"},
-					"max_margin_usage":                 map[string]any{"type": "number"},
-					"min_risk_reward_ratio":            map[string]any{"type": "number"},
-					"min_confidence":                   map[string]any{"type": "number"},
+					"max_positions":                    map[string]any{"type": "number", "description": "Displayed as System enforced on the manual strategy page; do not change unless the user explicitly asks for advanced configuration."},
+					"btc_eth_max_leverage":             map[string]any{"type": "number", "minimum": 1, "maximum": 20},
+					"altcoin_max_leverage":             map[string]any{"type": "number", "minimum": 1, "maximum": 20},
+					"btc_eth_max_position_value_ratio": map[string]any{"type": "number", "description": "Displayed as System enforced on the manual strategy page; do not change unless explicitly requested."},
+					"altcoin_max_position_value_ratio": map[string]any{"type": "number", "description": "Displayed as System enforced on the manual strategy page; do not change unless explicitly requested."},
+					"max_margin_usage":                 map[string]any{"type": "number", "description": "Displayed as System enforced on the manual strategy page; do not change unless explicitly requested."},
+					"min_risk_reward_ratio":            map[string]any{"type": "number", "minimum": 1, "maximum": 10, "description": "Manual page range 1-10, step 0.5."},
+					"min_confidence":                   map[string]any{"type": "number", "minimum": 50, "maximum": 100, "description": "Manual page range 50-100."},
 				},
 			},
 			"prompt_sections": map[string]any{
@@ -477,21 +358,21 @@ func strategyConfigSchema() map[string]any {
 			"grid_config": map[string]any{
 				"type": "object",
 				"properties": map[string]any{
-					"symbol":                  map[string]any{"type": "string"},
-					"grid_count":              map[string]any{"type": "number"},
-					"total_investment":        map[string]any{"type": "number"},
-					"leverage":                map[string]any{"type": "number"},
+					"symbol":                  map[string]any{"type": "string", "enum": []string{"BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT", "DOGEUSDT"}, "description": "Manual page dropdown options for grid trading symbols."},
+					"grid_count":              map[string]any{"type": "number", "minimum": 5, "maximum": 50, "description": "Manual page range 5-50."},
+					"total_investment":        map[string]any{"type": "number", "minimum": 100, "description": "Manual page minimum 100 USDT."},
+					"leverage":                map[string]any{"type": "number", "minimum": 1, "maximum": 5, "description": "Manual page range 1-5."},
 					"upper_price":             map[string]any{"type": "number"},
 					"lower_price":             map[string]any{"type": "number"},
 					"use_atr_bounds":          map[string]any{"type": "boolean"},
-					"atr_multiplier":          map[string]any{"type": "number"},
+					"atr_multiplier":          map[string]any{"type": "number", "minimum": 1, "maximum": 5, "description": "Manual page range 1-5, step 0.5."},
 					"distribution":            map[string]any{"type": "string", "enum": []string{"uniform", "gaussian", "pyramid"}},
-					"max_drawdown_pct":        map[string]any{"type": "number"},
-					"stop_loss_pct":           map[string]any{"type": "number"},
-					"daily_loss_limit_pct":    map[string]any{"type": "number"},
+					"max_drawdown_pct":        map[string]any{"type": "number", "minimum": 5, "maximum": 50, "description": "Manual page range 5-50."},
+					"stop_loss_pct":           map[string]any{"type": "number", "minimum": 1, "maximum": 20, "description": "Manual page range 1-20."},
+					"daily_loss_limit_pct":    map[string]any{"type": "number", "minimum": 1, "maximum": 30, "description": "Manual page range 1-30."},
 					"use_maker_only":          map[string]any{"type": "boolean"},
 					"enable_direction_adjust": map[string]any{"type": "boolean"},
-					"direction_bias_ratio":    map[string]any{"type": "number"},
+					"direction_bias_ratio":    map[string]any{"type": "number", "minimum": 0.55, "maximum": 0.9, "description": "Manual page range 0.55-0.90 (shown as 55%-90%)."},
 				},
 			},
 		},
@@ -2012,15 +1893,14 @@ func (a *Agent) toolManageStrategy(storeUserID, argsJSON string) string {
 		if lockedField, ok := strategyConfigContainsLockedField(args.Config); ok {
 			return fmt.Sprintf(`{"error":"%s"}`, strategyLockedFieldError("zh", lockedField))
 		}
-		validation := validateStrategyConfigPatch(args.Config)
 		if err := a.ensureUniqueStrategyName(storeUserID, name, ""); err != nil {
 			return fmt.Sprintf(`{"error":"%s"}`, err)
 		}
 		defaultConfig := store.GetDefaultStrategyConfig(strings.TrimSpace(args.Lang))
 		var cfg any = defaultConfig
 		var warnings []string
-		if len(validation.Config) > 0 {
-			merged, err := store.MergeStrategyConfig(defaultConfig, validation.Config)
+		if len(args.Config) > 0 {
+			merged, err := store.MergeStrategyConfig(defaultConfig, args.Config)
 			if err != nil {
 				return fmt.Sprintf(`{"error":"invalid strategy config: %s"}`, err)
 			}
@@ -2051,14 +1931,10 @@ func (a *Agent) toolManageStrategy(storeUserID, argsJSON string) string {
 			return fmt.Sprintf(`{"error":"failed to create strategy: %s"}`, err)
 		}
 		payload, _ := json.Marshal(map[string]any{
-			"status":              "ok",
-			"action":              "create",
-			"created_strategy_id": record.ID,
-			"strategy":            safeStrategyForTool(record),
-			"changed_fields":      validation.ChangedFields,
-			"unchanged_defaults":  validation.UnchangedDefaults,
-			"rejected_fields":     validation.RejectedFields,
-			"warnings":            warnings,
+			"status":   "ok",
+			"action":   "create",
+			"strategy": safeStrategyForTool(record),
+			"warnings": warnings,
 		})
 		return string(payload)
 	case "update":
@@ -2069,7 +1945,6 @@ func (a *Agent) toolManageStrategy(storeUserID, argsJSON string) string {
 		if lockedField, ok := strategyConfigContainsLockedField(args.Config); ok {
 			return fmt.Sprintf(`{"error":"%s"}`, strategyLockedFieldError("zh", lockedField))
 		}
-		validation := validateStrategyConfigPatch(args.Config)
 		existing, err := a.store.Strategy().Get(storeUserID, strategyID)
 		if err != nil {
 			return fmt.Sprintf(`{"error":"failed to load strategy: %s"}`, err)
@@ -2098,29 +1973,16 @@ func (a *Agent) toolManageStrategy(storeUserID, argsJSON string) string {
 		if args.ConfigVisible != nil {
 			configVisible = *args.ConfigVisible
 		}
-		metadataChanged := make([]string, 0, 4)
-		if !sameEntityName(name, existing.Name) {
-			metadataChanged = append(metadataChanged, "name")
-		}
-		if description != existing.Description {
-			metadataChanged = append(metadataChanged, "description")
-		}
-		if isPublic != existing.IsPublic {
-			metadataChanged = append(metadataChanged, "is_public")
-		}
-		if configVisible != existing.ConfigVisible {
-			metadataChanged = append(metadataChanged, "config_visible")
-		}
 		configJSON := existing.Config
 		var warnings []string
-		if len(validation.Config) > 0 {
+		if len(args.Config) > 0 {
 			var existingConfig store.StrategyConfig
 			if strings.TrimSpace(existing.Config) != "" {
 				if err := json.Unmarshal([]byte(existing.Config), &existingConfig); err != nil {
 					return fmt.Sprintf(`{"error":"failed to load existing strategy config: %s"}`, err)
 				}
 			}
-			merged, err := store.MergeStrategyConfig(existingConfig, validation.Config)
+			merged, err := store.MergeStrategyConfig(existingConfig, args.Config)
 			if err != nil {
 				return fmt.Sprintf(`{"error":"invalid strategy config: %s"}`, err)
 			}
@@ -2152,18 +2014,11 @@ func (a *Agent) toolManageStrategy(storeUserID, argsJSON string) string {
 		if err != nil {
 			return fmt.Sprintf(`{"error":"strategy updated but failed to reload: %s"}`, err)
 		}
-		changedFields := append([]string{}, metadataChanged...)
-		changedFields = append(changedFields, validation.ChangedFields...)
-		sort.Strings(changedFields)
 		payload, _ := json.Marshal(map[string]any{
-			"status":             "ok",
-			"action":             "update",
-			"strategy_id":        updated.ID,
-			"strategy":           safeStrategyForTool(updated),
-			"changed_fields":     changedFields,
-			"unchanged_defaults": validation.UnchangedDefaults,
-			"rejected_fields":    validation.RejectedFields,
-			"warnings":           warnings,
+			"status":   "ok",
+			"action":   "update",
+			"strategy": safeStrategyForTool(updated),
+			"warnings": warnings,
 		})
 		return string(payload)
 	case "delete":

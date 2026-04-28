@@ -410,6 +410,47 @@ func TestClient_CallWithRequest_RetrySleepStopsWhenContextCancelled(t *testing.T
 	}
 }
 
+func TestClient_CallWithRequest_RetriesUpstreamEmptyOutput(t *testing.T) {
+	mockHTTP := NewMockHTTPClient()
+	attempts := 0
+	mockHTTP.ResponseFunc = func(req *http.Request) (*http.Response, error) {
+		attempts++
+		if attempts == 1 {
+			body := `{"error":{"code":"upstream_empty_output","message":"Upstream model returned empty output.","type":"rate_limit_error"}}`
+			return &http.Response{
+				StatusCode: http.StatusTooManyRequests,
+				Body:       io.NopCloser(strings.NewReader(body)),
+				Header:     make(http.Header),
+			}, nil
+		}
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(strings.NewReader(`{"choices":[{"message":{"content":"ok after retry"}}]}`)),
+			Header:     make(http.Header),
+		}, nil
+	}
+
+	client := NewClient(
+		WithHTTPClient(mockHTTP.ToHTTPClient()),
+		WithLogger(NewMockLogger()),
+		WithAPIKey("sk-test-key"),
+		WithMaxRetries(2),
+		WithRetryWaitBase(time.Millisecond),
+	)
+	request := NewRequestBuilder().WithUserPrompt("Hello").MustBuild()
+
+	result, err := client.CallWithRequest(request)
+	if err != nil {
+		t.Fatalf("should retry upstream empty output and succeed: %v", err)
+	}
+	if result != "ok after retry" {
+		t.Fatalf("expected retry result, got %q", result)
+	}
+	if attempts != 2 {
+		t.Fatalf("expected 2 attempts, got %d", attempts)
+	}
+}
+
 func TestClient_CallWithRequest_MultiRound(t *testing.T) {
 	mockHTTP := NewMockHTTPClient()
 	mockHTTP.SetSuccessResponse("Multi-round response")
