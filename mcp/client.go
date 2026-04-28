@@ -197,7 +197,9 @@ func (client *Client) CallWithMessages(systemPrompt, userPrompt string) (string,
 		if attempt < maxRetries {
 			waitTime := client.Cfg.RetryWaitBase * time.Duration(attempt)
 			client.Log.Infof("⏳ Waiting %v before retry...", waitTime)
-			time.Sleep(waitTime)
+			if err := sleepWithContext(context.Background(), waitTime); err != nil {
+				return "", err
+			}
 		}
 	}
 
@@ -332,6 +334,38 @@ func (client *Client) BuildRequest(url string, jsonData []byte) (*http.Request, 
 	return req, nil
 }
 
+func contextFromRequest(req *Request) context.Context {
+	if req != nil && req.Ctx != nil {
+		return req.Ctx
+	}
+	return context.Background()
+}
+
+func (client *Client) buildHTTPRequestWithContext(ctx context.Context, url string, jsonData []byte) (*http.Request, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	httpReq, err := client.Hooks.BuildRequest(url, jsonData)
+	if err != nil {
+		return nil, err
+	}
+	return httpReq.WithContext(ctx), nil
+}
+
+func sleepWithContext(ctx context.Context, d time.Duration) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+	select {
+	case <-timer.C:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
 // Call single AI API call (fixed flow, cannot be overridden)
 func (client *Client) Call(systemPrompt, userPrompt string) (string, error) {
 	// Print current AI configuration
@@ -450,7 +484,9 @@ func (client *Client) CallWithRequest(req *Request) (string, error) {
 		if attempt < maxRetries {
 			waitTime := client.Cfg.RetryWaitBase * time.Duration(attempt)
 			client.Log.Infof("⏳ Waiting %v before retry...", waitTime)
-			time.Sleep(waitTime)
+			if err := sleepWithContext(contextFromRequest(req), waitTime); err != nil {
+				return "", err
+			}
 		}
 	}
 
@@ -482,7 +518,9 @@ func (client *Client) CallWithRequestFull(req *Request) (*LLMResponse, error) {
 		}
 		if attempt < maxRetries {
 			waitTime := client.Cfg.RetryWaitBase * time.Duration(attempt)
-			time.Sleep(waitTime)
+			if err := sleepWithContext(contextFromRequest(req), waitTime); err != nil {
+				return nil, err
+			}
 		}
 	}
 	return nil, fmt.Errorf("still failed after %d retries: %w", maxRetries, lastErr)
@@ -499,7 +537,7 @@ func (client *Client) callWithRequestFull(req *Request) (*LLMResponse, error) {
 	}
 
 	url := client.Hooks.BuildUrl()
-	httpReq, err := client.Hooks.BuildRequest(url, jsonData)
+	httpReq, err := client.buildHTTPRequestWithContext(contextFromRequest(req), url, jsonData)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -537,7 +575,7 @@ func (client *Client) callWithRequest(req *Request) (string, error) {
 	url := client.Hooks.BuildUrl()
 	client.Log.Infof("📡 [MCP %s] Request URL: %s", client.String(), url)
 
-	httpReq, err := client.Hooks.BuildRequest(url, jsonData)
+	httpReq, err := client.buildHTTPRequestWithContext(contextFromRequest(req), url, jsonData)
 	if err != nil {
 		return "", fmt.Errorf("failed to create request: %w", err)
 	}
@@ -679,7 +717,7 @@ func (client *Client) CallWithRequestStream(req *Request, onChunk func(string)) 
 	}
 
 	url := client.Hooks.BuildUrl()
-	httpReq, err := client.Hooks.BuildRequest(url, jsonData)
+	httpReq, err := client.buildHTTPRequestWithContext(contextFromRequest(req), url, jsonData)
 	if err != nil {
 		return "", err
 	}
@@ -687,7 +725,7 @@ func (client *Client) CallWithRequestStream(req *Request, onChunk func(string)) 
 	// Idle-timeout watchdog: cancel the request if no SSE line arrives for 60 seconds.
 	// This breaks the scanner out of an indefinitely blocking Read on a hung connection.
 	const idleTimeout = 60 * time.Second
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(contextFromRequest(req))
 	defer cancel()
 	resetCh := make(chan struct{}, 1)
 	go func() {
