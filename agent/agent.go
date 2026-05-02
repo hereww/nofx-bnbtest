@@ -421,6 +421,9 @@ func (a *Agent) handleMessageForStoreUser(ctx context.Context, storeUserID strin
 	if reply, handled := a.handleTradeConfirmation(ctx, userID, text, lang); handled {
 		return reply, nil
 	}
+	if reply, handled := a.handleModelWalletBalanceQuestion(storeUserID, lang, text); handled {
+		return reply, nil
+	}
 
 	// Everything else goes through the planner and tool system.
 	return a.thinkAndAct(ctx, storeUserID, userID, lang, text)
@@ -463,6 +466,12 @@ func (a *Agent) handleMessageStreamForStoreUser(ctx context.Context, storeUserID
 		return "🧹 Conversation history cleared.", nil
 	}
 	if reply, handled := a.handleTradeConfirmation(ctx, userID, text, lang); handled {
+		if onEvent != nil {
+			emitStreamText(onEvent, reply)
+		}
+		return reply, nil
+	}
+	if reply, handled := a.handleModelWalletBalanceQuestion(storeUserID, lang, text); handled {
 		if onEvent != nil {
 			emitStreamText(onEvent, reply)
 		}

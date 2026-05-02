@@ -28,8 +28,8 @@
     },
     "passphrase": {
       "type": "credential",
-      "required_for": ["okx"],
-      "description": "OKX 专用 Passphrase，OKX 账户启用前必须填写，其他交易所不需要。"
+      "required_for": ["okx", "bitget", "kucoin"],
+      "description": "OKX、Bitget、KuCoin 专用 Passphrase/API 口令，对这些交易所启用前必须填写；Binance、Bybit、Gate、Indodax 通常不需要。"
     },
     "testnet": {
       "type": "bool",
@@ -94,11 +94,10 @@
     "api_key 格式：至少 8 位字母数字，不符合时提示用户重新输入完整 Key。",
     "secret_key 格式：至少 8 位字母数字，或十六进制格式，不符合时提示用户重新输入。",
     "OKX 账户启用前必须填写 passphrase，否则拒绝启用并提示补填。",
-    "Bitget/KuCoin 页面流程里也需要 passphrase，缺失时应明确提示补填。",
+    "Bitget 和 KuCoin 页面流程里也需要 passphrase/API 口令，不能回答“没有就留空”；缺失时应明确提示补填。",
     "Hyperliquid 创建/更新时应与手动页面保持一致：至少收集 api_key + hyperliquid_wallet_addr。",
     "Hyperliquid 账户启用前必须填写 hyperliquid_wallet_addr。",
     "若用户使用 Hyperliquid unified account 模式，应明确记录 hyperliquid_unified_account 开关状态。",
-    "Aster 账户启用前必须填写 aster_user、aster_signer、aster_private_key 三个字段。",
     "Aster 账户启用前必须填写 aster_user、aster_signer、aster_private_key 三个字段，任一缺失都不能启用。",
     "Lighter 账户启用前必须填写 lighter_wallet_addr + lighter_api_key_private_key；若当前账户模式还依赖 lighter_private_key，也要先补齐后再启用。",
     "lighter_api_key_index 超出 0～255 时自动收敛到边界值并告知用户。",
@@ -125,6 +124,7 @@
       "dynamic_rules": [
         "确认 exchange_type 后，根据 per_exchange_required_fields 决定需要追问哪些凭证字段。",
         "Binance/Bybit/Gate/Indodax 需要 API Key + Secret；OKX/Bitget/KuCoin 还必须追问 passphrase；Hyperliquid 必须追问 api_key + 钱包地址，并允许记录 unified account 开关；Aster 必须追问 user/signer/private_key；Lighter 必须追问钱包地址和 api_key_private_key。",
+        "如果用户选择 OKX、Bitget 或 KuCoin，不能把 passphrase 说成可选项；没有 passphrase 时应停在补字段，不要创建半成品。",
         "凭证字段格式不符时，用人话告知用户正确格式，不要静默丢弃。",
         "若当前父任务只是缺一个可用交易所，本动作完成后应允许父任务恢复并消费新的 exchange_id。",
         "若请求只是在启用已有交易所，不应误走 create，应改走 update_status。"

@@ -19,17 +19,17 @@ import { WelcomeScreen } from '../components/agent/WelcomeScreen'
 import { ChatMessages } from '../components/agent/ChatMessages'
 import { ChatInput, type ChatInputHandle } from '../components/agent/ChatInput'
 import { UserPreferencesPanel } from '../components/agent/UserPreferencesPanel'
-import {
-  useAgentChatStore,
-} from '../stores/agentChatStore'
+import { useAgentChatStore } from '../stores/agentChatStore'
 import type { AgentMessage as Message, AgentStep } from '../types/agent'
 import {
   chatStorageKey,
   clearAgentMessages,
   getStoredAuthUserId,
+  loadAgentDraft,
   loadAgentMessages,
   migrateAgentMessages,
   prepareAgentMessagesForPersistence,
+  persistAgentDraft,
   persistAgentMessages,
 } from '../lib/agentChatStorage'
 
@@ -48,6 +48,34 @@ function cleanupActiveAgentStream() {
     // Ignore stream cancellation races during teardown.
   })
   activeStreamReader = null
+}
+
+function stopActiveAgentStream(userId?: string, language = 'zh') {
+  if (!activeStreamAbortController && !activeStreamReader) return
+  const stoppedText =
+    language === 'zh' ? '已中止当前回复。' : 'Stopped the current response.'
+  const now = new Date().toLocaleTimeString([], {
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+  patchMessagesInStore(
+    (prev) =>
+      prev.map((m) => {
+        if (m.role !== 'bot' || !m.streaming) return m
+        const text = m.text?.trim()
+          ? `${m.text.trimEnd()}\n\n${stoppedText}`
+          : stoppedText
+        return {
+          ...m,
+          text,
+          streaming: false,
+          time: m.time || now,
+        }
+      }),
+    userId
+  )
+  cleanupActiveAgentStream()
+  useAgentChatStore.getState().setLoading(false)
 }
 
 function persistMessagesSnapshotForUser(userId?: string) {
@@ -109,6 +137,7 @@ async function runAgentStream(params: {
   if (text.trim() === '/clear') {
     try {
       clearAgentMessages(window.localStorage, storageUserId)
+      useAgentChatStore.getState().setDraftText('')
     } catch {
       // Ignore storage cleanup failure.
     }
@@ -191,9 +220,7 @@ async function runAgentStream(params: {
             patchMessagesInStore(
               (prev) =>
                 prev.map((m) =>
-                  m.id === botId
-                    ? { ...m, text: finalText, time: now() }
-                    : m
+                  m.id === botId ? { ...m, text: finalText, time: now() } : m
                 ),
               storageUserId
             )
@@ -424,10 +451,12 @@ export function AgentChatPage() {
   const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth > 1024)
   const storageKey = chatStorageKey(user?.id || storageUserId)
   const messages = useAgentChatStore((state) => state.messages)
+  const draftText = useAgentChatStore((state) => state.draftText)
   const loading = useAgentChatStore((state) => state.loading)
   const historyHydrated = useAgentChatStore((state) => state.hydrated)
   const activeUserId = useAgentChatStore((state) => state.activeUserId)
   const resetForUser = useAgentChatStore((state) => state.resetForUser)
+  const setDraftText = useAgentChatStore((state) => state.setDraftText)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const chatInputRef = useRef<ChatInputHandle>(null)
 
@@ -465,10 +494,12 @@ export function AgentChatPage() {
       nextUserId,
       loadAgentMessages<Message>(window.localStorage, nextUserId).messages
     )
+    setDraftText(loadAgentDraft(window.localStorage, nextUserId))
   }, [
     activeUserId,
     historyHydrated,
     resetForUser,
+    setDraftText,
     storageKey,
     storageUserId,
     user?.id,
@@ -489,6 +520,21 @@ export function AgentChatPage() {
       // Ignore storage failures and keep the chat usable.
     }
   }, [historyHydrated, messages, storageKey, storageUserId, user?.id])
+
+  // Persist the unsent draft so navigating away from the Agent page does not
+  // wipe what the user was typing.
+  useEffect(() => {
+    if (!historyHydrated) return
+    try {
+      persistAgentDraft(
+        window.localStorage,
+        user?.id || storageUserId,
+        draftText
+      )
+    } catch {
+      // Ignore storage failures and keep typing responsive.
+    }
+  }, [draftText, historyHydrated, storageKey, storageUserId, user?.id])
 
   // Responsive sidebar
   useEffect(() => {
@@ -524,6 +570,11 @@ export function AgentChatPage() {
       storageUserId: user?.id || storageUserId,
       onDone: () => chatInputRef.current?.focus(),
     })
+  }
+
+  const stopCurrentResponse = () => {
+    stopActiveAgentStream(user?.id || storageUserId, language)
+    chatInputRef.current?.focus()
   }
 
   const quickActions =
@@ -682,7 +733,10 @@ export function AgentChatPage() {
           ref={chatInputRef}
           language={language}
           loading={loading}
+          value={draftText}
+          onChange={setDraftText}
           onSend={send}
+          onStop={stopCurrentResponse}
         />
       </div>
 

@@ -1472,11 +1472,37 @@ func (a *Agent) describeModel(storeUserID, lang string, target *EntityReference)
 		model = &payload.ModelConfigs[0]
 	}
 	if lang == "zh" {
-		return fmt.Sprintf("模型配置“%s”详情：\n- Provider：%s\n- 已启用：%t\n- API Key：%t\n- URL：%s\n- Model Name：%s",
-			defaultIfEmpty(model.Name, model.ID), model.Provider, model.Enabled, model.HasAPIKey, defaultIfEmpty(model.CustomAPIURL, "未设置"), defaultIfEmpty(model.CustomModelName, "未设置")), true
+		lines := []string{
+			fmt.Sprintf("模型配置“%s”详情：", defaultIfEmpty(model.Name, model.ID)),
+			fmt.Sprintf("- Provider：%s", model.Provider),
+			fmt.Sprintf("- 已启用：%t", model.Enabled),
+			fmt.Sprintf("- API Key：%t", model.HasAPIKey),
+			fmt.Sprintf("- URL：%s", defaultIfEmpty(model.CustomAPIURL, "未设置")),
+			fmt.Sprintf("- Model Name：%s", defaultIfEmpty(model.CustomModelName, "未设置")),
+		}
+		if strings.TrimSpace(model.WalletAddress) != "" {
+			lines = append(lines, fmt.Sprintf("- 钱包地址：%s", model.WalletAddress))
+		}
+		if strings.TrimSpace(model.BalanceUSDC) != "" {
+			lines = append(lines, fmt.Sprintf("- 钱包余额：%s USDC", model.BalanceUSDC))
+		}
+		return strings.Join(lines, "\n"), true
 	}
-	return fmt.Sprintf("Model config %q details:\n- Provider: %s\n- Enabled: %t\n- API key present: %t\n- URL: %s\n- Model name: %s",
-		defaultIfEmpty(model.Name, model.ID), model.Provider, model.Enabled, model.HasAPIKey, defaultIfEmpty(model.CustomAPIURL, "not set"), defaultIfEmpty(model.CustomModelName, "not set")), true
+	lines := []string{
+		fmt.Sprintf("Model config %q details:", defaultIfEmpty(model.Name, model.ID)),
+		fmt.Sprintf("- Provider: %s", model.Provider),
+		fmt.Sprintf("- Enabled: %t", model.Enabled),
+		fmt.Sprintf("- API key present: %t", model.HasAPIKey),
+		fmt.Sprintf("- URL: %s", defaultIfEmpty(model.CustomAPIURL, "not set")),
+		fmt.Sprintf("- Model name: %s", defaultIfEmpty(model.CustomModelName, "not set")),
+	}
+	if strings.TrimSpace(model.WalletAddress) != "" {
+		lines = append(lines, fmt.Sprintf("- Wallet address: %s", model.WalletAddress))
+	}
+	if strings.TrimSpace(model.BalanceUSDC) != "" {
+		lines = append(lines, fmt.Sprintf("- Wallet balance: %s USDC", model.BalanceUSDC))
+	}
+	return strings.Join(lines, "\n"), true
 }
 
 func findTraderByReference(items []safeTraderToolConfig, target *EntityReference) *safeTraderToolConfig {

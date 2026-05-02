@@ -938,6 +938,8 @@ type safeModelToolConfig struct {
 	HasAPIKey       bool   `json:"has_api_key"`
 	CustomAPIURL    string `json:"custom_api_url,omitempty"`
 	CustomModelName string `json:"custom_model_name,omitempty"`
+	WalletAddress   string `json:"wallet_address,omitempty"`
+	BalanceUSDC     string `json:"balance_usdc,omitempty"`
 }
 
 type safeTraderToolConfig struct {
@@ -1115,7 +1117,7 @@ func extractTraderInitialBalance(balanceInfo map[string]interface{}) (float64, b
 }
 
 func safeModelForTool(model *store.AIModel) safeModelToolConfig {
-	return safeModelToolConfig{
+	safeModel := safeModelToolConfig{
 		ID:              model.ID,
 		Name:            model.Name,
 		Provider:        model.Provider,
@@ -1124,6 +1126,18 @@ func safeModelForTool(model *store.AIModel) safeModelToolConfig {
 		CustomAPIURL:    model.CustomAPIURL,
 		CustomModelName: model.CustomModelName,
 	}
+	if agentProviderSupportsUSDCBalance(model.Provider) {
+		privateKey := strings.TrimSpace(string(model.APIKey))
+		if privateKey != "" {
+			if walletAddress, err := agentWalletAddressFromPrivateKey(privateKey); err == nil && strings.TrimSpace(walletAddress) != "" {
+				safeModel.WalletAddress = walletAddress
+				if balance, balanceErr := agentQueryUSDCBalanceCached(walletAddress); balanceErr == nil {
+					safeModel.BalanceUSDC = fmt.Sprintf("%.6f", balance)
+				}
+			}
+		}
+	}
+	return safeModel
 }
 
 func modelConfigUsable(provider, modelID, apiKey, customAPIURL, customModelName string) bool {

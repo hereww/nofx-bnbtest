@@ -18,6 +18,8 @@ type SkillDefinition struct {
 	Domain                    string                           `json:"domain"`
 	Description               string                           `json:"description"`
 	Intents                   []string                         `json:"intents,omitempty"`
+	Capabilities              []string                         `json:"capabilities,omitempty"`
+	DynamicRules              []string                         `json:"dynamic_rules,omitempty"`
 	Actions                   map[string]SkillActionDefinition `json:"actions,omitempty"`
 	ToolMapping               map[string]string                `json:"tool_mapping,omitempty"`
 	FieldConstraints          map[string]SkillFieldConstraint  `json:"field_constraints,omitempty"`
@@ -96,6 +98,8 @@ func normalizeSkillDefinition(def SkillDefinition) SkillDefinition {
 	def.Domain = strings.TrimSpace(def.Domain)
 	def.Description = strings.TrimSpace(def.Description)
 	def.Intents = cleanStringList(def.Intents)
+	def.Capabilities = cleanStringList(def.Capabilities)
+	def.DynamicRules = cleanStringList(def.DynamicRules)
 
 	if len(def.Actions) > 0 {
 		normalized := make(map[string]SkillActionDefinition, len(def.Actions))
@@ -194,6 +198,9 @@ func buildSkillRoutingSummary(lang string, skillNames []string) string {
 			continue
 		}
 		parts := []string{strings.TrimSpace(def.Description)}
+		if len(def.DynamicRules) > 0 {
+			parts = append(parts, strings.Join(def.DynamicRules, " "))
+		}
 		switch name {
 		case "trader_management":
 			if lang == "zh" {
@@ -221,6 +228,20 @@ func buildSkillDefinitionSummary(lang string, skillNames []string) string {
 			continue
 		}
 		parts := []string{strings.TrimSpace(def.Description)}
+		if len(def.Capabilities) > 0 {
+			if lang == "zh" {
+				parts = append(parts, "能力: "+strings.Join(def.Capabilities, "；"))
+			} else {
+				parts = append(parts, "capabilities: "+strings.Join(def.Capabilities, "; "))
+			}
+		}
+		if len(def.DynamicRules) > 0 {
+			if lang == "zh" {
+				parts = append(parts, "规则: "+strings.Join(def.DynamicRules, "；"))
+			} else {
+				parts = append(parts, "rules: "+strings.Join(def.DynamicRules, "; "))
+			}
+		}
 		if action, ok := def.Actions["create"]; ok && len(action.RequiredSlots) > 0 {
 			if lang == "zh" {
 				parts = append(parts, "创建必填: "+formatRequiredSlotList(lang, action.RequiredSlots))

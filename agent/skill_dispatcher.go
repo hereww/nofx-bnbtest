@@ -244,6 +244,9 @@ func formatOptionList(prefix string, options []traderSkillOption) string {
 		if label == "" {
 			label = option.ID
 		}
+		if hint := strings.TrimSpace(option.Hint); hint != "" {
+			label += "（" + hint + "）"
+		}
 		if option.Enabled {
 			label += "（已启用）"
 		} else {
@@ -267,6 +270,28 @@ func parseSkillError(raw string) string {
 	return strings.TrimSpace(raw)
 }
 
+func modelWalletBalanceHint(model *store.AIModel) string {
+	if model == nil || !agentProviderSupportsUSDCBalance(model.Provider) {
+		return ""
+	}
+	privateKey := strings.TrimSpace(string(model.APIKey))
+	if privateKey == "" {
+		return "钱包未配置"
+	}
+	walletAddress, err := agentWalletAddressFromPrivateKey(privateKey)
+	if err != nil || strings.TrimSpace(walletAddress) == "" {
+		return "钱包私钥无效"
+	}
+	balance, err := agentQueryUSDCBalanceCached(walletAddress)
+	if err != nil {
+		return "钱包余额暂时无法读取"
+	}
+	if balance <= 0 {
+		return "钱包余额 0 USDC，需充值后才能稳定调用"
+	}
+	return fmt.Sprintf("钱包余额 %.4g USDC", balance)
+}
+
 func (a *Agent) loadEnabledModelOptions(storeUserID string) []traderSkillOption {
 	if a.store == nil {
 		return nil
@@ -284,6 +309,7 @@ func (a *Agent) loadEnabledModelOptions(storeUserID string) []traderSkillOption 
 		hint := strings.Join(cleanStringList([]string{
 			strings.TrimSpace(model.CustomModelName),
 			strings.TrimSpace(model.Provider),
+			modelWalletBalanceHint(model),
 		}), " / ")
 		out = append(out, traderSkillOption{ID: model.ID, Name: name, Hint: hint, Enabled: model.Enabled})
 	}
@@ -1046,7 +1072,7 @@ func findOptionByIDOrName(options []traderSkillOption, query string) *traderSkil
 		return nil
 	}
 	for i, opt := range options {
-		if opt.ID == query || strings.EqualFold(opt.Name, query) {
+		if opt.ID == query || strings.EqualFold(opt.Name, query) || strings.EqualFold(opt.Hint, query) {
 			return &options[i]
 		}
 	}
@@ -1060,7 +1086,12 @@ func findUniqueContainingOption(options []traderSkillOption, query string) *trad
 	}
 	matches := make([]traderSkillOption, 0, 1)
 	for _, opt := range options {
-		if strings.Contains(strings.ToLower(opt.Name), query) || strings.Contains(query, strings.ToLower(opt.Name)) {
+		name := strings.ToLower(strings.TrimSpace(opt.Name))
+		hint := strings.ToLower(strings.TrimSpace(opt.Hint))
+		id := strings.ToLower(strings.TrimSpace(opt.ID))
+		if (name != "" && (strings.Contains(name, query) || strings.Contains(query, name))) ||
+			(hint != "" && (strings.Contains(hint, query) || strings.Contains(query, hint))) ||
+			(id != "" && (strings.Contains(id, query) || strings.Contains(query, id))) {
 			matches = append(matches, opt)
 		}
 	}

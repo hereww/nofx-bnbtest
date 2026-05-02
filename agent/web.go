@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -165,11 +166,21 @@ func (w *WebHandler) HandleChatStream(rw http.ResponseWriter, r *http.Request) {
 	defer cancel()
 
 	resp, err := w.agent.HandleMessageStreamForStoreUser(ctx, storeUserIDFromContext(r.Context()), req.UserID, msg, func(event, data string) {
+		if ctx.Err() != nil {
+			return
+		}
 		writeSSE(rw, flusher, event, data)
 	})
 	if err != nil {
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) || ctx.Err() != nil {
+			w.logger.Info("agent stream cancelled", "user_id", req.UserID, "error", err)
+			return
+		}
 		w.logger.Error("agent HandleMessageStream failed", "error", err, "user_id", req.UserID)
 		writeSSE(rw, flusher, "error", "I ran into a problem while handling that message. Please try again.")
+		return
+	}
+	if ctx.Err() != nil {
 		return
 	}
 	// Send final done event with complete response
