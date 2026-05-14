@@ -437,6 +437,9 @@ export function SettingsPage() {
                             <p className="text-xs text-zinc-500 capitalize">{exchange.exchange_type || exchange.type}</p>
                             {configBadge('API Key', !!exchange.has_api_key)}
                             {configBadge('Secret', !!exchange.has_secret_key)}
+                            {exchange.exchange_type === 'binance'
+                              ? configBadge(exchange.testnet ? 'Testnet' : 'Mainnet', true)
+                              : null}
                             {exchange.has_passphrase ? configBadge('Passphrase', true) : null}
                             {exchange.hyperliquidWalletAddr ? configBadge('Wallet', true) : null}
                             {exchange.has_aster_private_key ? configBadge('Aster Key', true) : null}

@@ -1,0 +1,171 @@
+- generic [ref=e1]:
+  - generic [ref=e4]:
+    - complementary [ref=e5]:
+      - generic [ref=e6]:
+        - generic [ref=e8] [cursor=pointer]:
+          - img [ref=e9]
+          - generic "双击可复制IP" [ref=e11]: 175.164.96.116
+          - generic [ref=e12]: "0"
+        - list [ref=e18]:
+          - listitem [ref=e19]:
+            - link "首页" [ref=e20] [cursor=pointer]:
+              - /url: /home
+              - img [ref=e21]
+              - generic [ref=e23]: 首页
+          - listitem [ref=e24]:
+            - link "网站" [ref=e25] [cursor=pointer]:
+              - /url: /site
+              - img [ref=e26]
+              - generic [ref=e28]: 网站
+          - listitem [ref=e29]:
+            - link "FTP" [ref=e30] [cursor=pointer]:
+              - /url: /ftp
+              - img [ref=e31]
+              - generic [ref=e33]: FTP
+          - listitem [ref=e34]:
+            - link "数据库" [ref=e35] [cursor=pointer]:
+              - /url: /database
+              - img [ref=e36]
+              - generic [ref=e38]: 数据库
+          - listitem [ref=e39]:
+            - link "Docker" [ref=e40] [cursor=pointer]:
+              - /url: /docker
+              - img [ref=e41]
+              - generic [ref=e43]: Docker
+          - listitem [ref=e44]:
+            - link "监控" [ref=e45] [cursor=pointer]:
+              - /url: /control
+              - img [ref=e46]
+              - generic [ref=e48]: 监控
+          - listitem [ref=e49]:
+            - link "安全" [ref=e50] [cursor=pointer]:
+              - /url: /firewall
+              - img [ref=e51]
+              - generic [ref=e53]: 安全
+          - listitem [ref=e54]:
+            - link "文件" [ref=e55] [cursor=pointer]:
+              - /url: /files
+              - img [ref=e56]
+              - generic [ref=e58]: 文件
+          - listitem [ref=e59]:
+            - link "日志" [ref=e60] [cursor=pointer]:
+              - /url: /logs
+              - img [ref=e61]
+              - generic [ref=e63]: 日志
+          - listitem [ref=e64]:
+            - link "多用户" [ref=e65] [cursor=pointer]:
+              - /url: /vhost
+              - img [ref=e66]
+              - generic [ref=e68]: 多用户
+          - listitem [ref=e69]:
+            - link "终端" [ref=e70] [cursor=pointer]:
+              - /url: /xterm
+              - img [ref=e71]
+              - generic [ref=e73]: 终端
+          - listitem [ref=e74]:
+            - link "计划任务" [ref=e75] [cursor=pointer]:
+              - /url: /crontab
+              - img [ref=e76]
+              - generic [ref=e78]: 计划任务
+          - listitem [ref=e79]:
+            - link "软件商店" [ref=e80] [cursor=pointer]:
+              - /url: /soft
+              - img [ref=e81]
+              - generic [ref=e83]: 软件商店
+          - listitem [ref=e84]:
+            - link "设置" [ref=e85] [cursor=pointer]:
+              - /url: /config
+              - img [ref=e86]
+              - generic [ref=e88]: 设置
+          - listitem [ref=e89]:
+            - link "退出" [ref=e90] [cursor=pointer]:
+              - /url: javascript:;
+              - img [ref=e91]
+              - generic [ref=e93]: 退出
+        - generic [ref=e95]:
+          - generic [ref=e98] [cursor=pointer]: 
+          - generic [ref=e101] [cursor=pointer]: 
+    - generic [ref=e102]:
+      - generic [ref=e296]:
+        - generic [ref=e297]:
+          - generic [ref=e298]:
+            - generic [ref=e301] [cursor=pointer]:
+              - generic "127.0.0.1" [ref=e304]: 本地服务器
+              - generic "关闭当前终端视图" [ref=e305]:
+                - generic [ref=e306]: 
+            - generic "点击添加服务器信息" [ref=e307] [cursor=pointer]:
+              - generic [ref=e308]: 
+            - generic "点击打开终端设置" [ref=e309] [cursor=pointer]:
+              - generic [ref=e310]: 
+            - generic "点击全屏显示" [ref=e311] [cursor=pointer]:
+              - generic [ref=e312]: 
+          - generic [ref=e318]:
+            - generic:
+              - textbox "Terminal input" [active]
+          - generic "点击隐藏右侧视图" [ref=e323] [cursor=pointer]
+        - generic [ref=e326]:
+          - tabpanel "服务器列表" [ref=e328]:
+            - generic [ref=e329]:
+              - button "添加服务器" [ref=e331] [cursor=pointer]:
+                - generic [ref=e332]: 添加服务器
+              - generic [ref=e334]:
+                - table [ref=e336]:
+                  - rowgroup [ref=e341]:
+                    - row "服务器IP 操作" [ref=e342]:
+                      - columnheader [ref=e343]:
+                        - generic [ref=e347] [cursor=pointer]:
+                          - checkbox
+                      - columnheader "服务器IP" [ref=e349]:
+                        - generic [ref=e351]: 服务器IP
+                      - columnheader "操作" [ref=e352]:
+                        - generic [ref=e354]: 操作
+                - generic [ref=e358]:
+                  - table:
+                    - rowgroup
+                  - generic [ref=e361]:
+                    - img [ref=e363]
+                    - generic [ref=e379]: 暂无数据
+              - generic [ref=e380]:
+                - generic [ref=e382] [cursor=pointer]:
+                  - checkbox
+                - generic [ref=e384]:
+                  - generic [ref=e388]:
+                    - generic [ref=e389]: 请选择批量操作
+                    - img [ref=e392]
+                  - button "批量操作" [disabled] [ref=e394]:
+                    - generic [ref=e395]: 批量操作
+          - tablist [ref=e399]:
+            - tab "服务器列表" [selected] [ref=e400]
+            - tab "录像审计" [ref=e401]
+            - tab "常用命令" [ref=e402]
+      - generic [ref=e234]:
+        - generic [ref=e235]: 宝塔Linux面板©2014-2026 广东堡塔安全技术有限公司 (bt.cn)
+        - separator [ref=e236]
+        - link "论坛求助" [ref=e237] [cursor=pointer]:
+          - /url: http://www.bt.cn/bbs
+          - generic [ref=e238]:
+            - img [ref=e239]
+            - generic [ref=e241]: 论坛求助
+        - separator [ref=e242]
+        - link "使用手册" [ref=e243] [cursor=pointer]:
+          - /url: https://docs.bt.cn
+          - generic [ref=e244]:
+            - img [ref=e245]
+            - generic [ref=e247]: 使用手册
+        - separator [ref=e248]
+        - generic [ref=e249]:
+          - img [ref=e250]
+          - generic [ref=e252] [cursor=pointer]: 微信公众号
+        - separator [ref=e253]
+        - link "正版查询" [ref=e254] [cursor=pointer]:
+          - /url: https://www.bt.cn/auth
+          - generic [ref=e255]:
+            - img [ref=e256]
+            - generic [ref=e258]: 正版查询
+        - separator [ref=e259]
+        - generic [ref=e260]:
+          - img [ref=e261]
+          - generic [ref=e263] [cursor=pointer]: 联系人工客服
+    - text:  
+  - img
+  - generic: 

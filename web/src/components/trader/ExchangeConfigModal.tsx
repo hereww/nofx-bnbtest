@@ -618,6 +618,28 @@ export function ExchangeConfigModal({
                   )}
 
                   {currentExchangeType === 'binance' && (
+                    <label
+                      className="flex items-center justify-between gap-4 p-4 rounded-xl cursor-pointer"
+                      style={{ background: '#0B0E11', border: '1px solid #2B3139' }}
+                    >
+                      <div>
+                        <div className="text-sm font-semibold" style={{ color: '#EAECEF' }}>
+                          {t('useTestnet', language)}
+                        </div>
+                        <div className="text-xs mt-1" style={{ color: '#848E9C' }}>
+                          {t('testnetDescription', language)}
+                        </div>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={testnet}
+                        onChange={(e) => setTestnet(e.target.checked)}
+                        className="h-5 w-5 accent-[#F0B90B]"
+                      />
+                    </label>
+                  )}
+
+                  {currentExchangeType === 'binance' && (
                     <div className="p-4 rounded-xl" style={{ background: 'rgba(240, 185, 11, 0.1)', border: '1px solid rgba(240, 185, 11, 0.2)' }}>
                       <div className="text-sm font-semibold mb-2" style={{ color: '#F0B90B' }}>
                         {t('whitelistIP', language)}

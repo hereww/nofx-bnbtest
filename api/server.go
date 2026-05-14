@@ -208,8 +208,9 @@ CRITICAL: Always use the "id" field for exchange_id. Do not use "exchange_type" 
 Use this endpoint to show balance and health in the exchange list without depending on traders.`,
 				s.handleGetExchangeAccountStates)
 			s.routeWithSchema(protected, "POST", "/exchanges", "Create a new exchange account",
-				`Body: {"exchange_type":"<string>","account_name":"<string, user label>","enabled":true,"api_key":"<string>","secret_key":"<string>","passphrase":"<string, required for okx/gate/kucoin>"}
+				`Body: {"exchange_type":"<string>","account_name":"<string, user label>","enabled":true,"api_key":"<string>","secret_key":"<string>","passphrase":"<string, required for okx/gate/kucoin>","testnet":<bool, optional>}
 exchange_type values: "binance","bybit","okx","bitget","gate","kucoin","indodax" (CEX) | "hyperliquid","aster","lighter" (DEX)
+For Binance USD-M Futures, set testnet=true to use https://testnet.binancefuture.com. Binance testnet requires separate testnet API keys; mainnet keys will not work.
 Required fields by exchange:
   binance/bybit/bitget/indodax: api_key + secret_key
   okx/gate/kucoin: api_key + secret_key + passphrase
@@ -218,7 +219,7 @@ Required fields by exchange:
   lighter: lighter_wallet_addr + lighter_private_key + lighter_api_key_private_key + lighter_api_key_index`,
 				s.handleCreateExchange)
 			s.routeWithSchema(protected, "PUT", "/exchanges", "Update an existing exchange account configuration",
-				`Body: {"id":"<EXACT id from GET /api/exchanges>","exchange_type":"<string>","account_name":"<string>","enabled":<bool>,"api_key":"<string>","secret_key":"<string>","passphrase":"<string, for okx/gate/kucoin>"}
+				`Body: {"id":"<EXACT id from GET /api/exchanges>","exchange_type":"<string>","account_name":"<string>","enabled":<bool>,"api_key":"<string>","secret_key":"<string>","passphrase":"<string, for okx/gate/kucoin>","testnet":<bool, optional>}
 Use this to enable/disable an exchange or update API credentials. The "id" field is required to identify which exchange to update.`,
 				s.handleUpdateExchangeConfigs)
 			s.routeWithSchema(protected, "DELETE", "/exchanges/:id", "Delete exchange account",

@@ -62,7 +62,12 @@ type FuturesTrader struct {
 
 // NewFuturesTrader creates futures trader
 func NewFuturesTrader(apiKey, secretKey string, userId string) *FuturesTrader {
-	client := futures.NewClient(apiKey, secretKey)
+	return NewFuturesTraderWithTestnet(apiKey, secretKey, userId, false)
+}
+
+// NewFuturesTraderWithTestnet creates a Binance USD-M futures trader.
+func NewFuturesTraderWithTestnet(apiKey, secretKey string, userId string, testnet bool) *FuturesTrader {
+	client := newFuturesClient(apiKey, secretKey, testnet)
 
 	hookRes := hook.HookExec[hook.NewBinanceTraderResult](hook.NEW_BINANCE_TRADER, userId, client)
 	if hookRes != nil && hookRes.GetResult() != nil {
@@ -83,6 +88,14 @@ func NewFuturesTrader(apiKey, secretKey string, userId string) *FuturesTrader {
 	}
 
 	return trader
+}
+
+func newFuturesClient(apiKey, secretKey string, testnet bool) *futures.Client {
+	client := futures.NewClient(apiKey, secretKey)
+	if testnet {
+		client.BaseURL = futures.BaseApiTestnetUrl
+	}
+	return client
 }
 
 // setDualSidePosition sets dual-side position mode (called during initialization)

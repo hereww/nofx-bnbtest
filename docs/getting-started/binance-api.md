@@ -44,7 +44,17 @@ Add your API credentials through the NOFX web interface:
 2. Go to **Exchange Configuration**
 3. Enable **Binance**
 4. Enter your API Key and Secret Key
-5. Save configuration
+5. Turn on **Use Testnet** only when using Binance Futures testnet credentials
+6. Save configuration
+
+## Binance Futures Testnet
+
+NOFX supports Binance USDⓈ-M Futures testnet through the same Binance Futures exchange account form.
+
+- Testnet endpoint: `https://testnet.binancefuture.com`
+- Testnet requires API keys created for Binance Futures testnet.
+- Mainnet Binance API keys do not work on testnet, and testnet API keys do not work on mainnet.
+- Keep separate NOFX exchange accounts for mainnet and testnet, and label the account name clearly.
 
 ## Troubleshooting
 
@@ -52,6 +62,7 @@ Add your API credentials through the NOFX web interface:
 |-------|----------|
 | `Invalid API-key` | Check if API key is correct |
 | `Signature verification failed` | Check if Secret key is correct |
+| `Invalid API-key` on testnet | Check that you are using Binance Futures testnet credentials and enabled **Use Testnet** |
 | `IP not whitelisted` | Add your IP to whitelist or disable IP restriction |
 | `Futures not enabled` | Enable Futures permission in API settings |
 

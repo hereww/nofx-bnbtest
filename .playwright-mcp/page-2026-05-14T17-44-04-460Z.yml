@@ -1,0 +1,36 @@
+- generic [ref=e2]:
+  - region "Notifications alt+T"
+  - generic [ref=e3]:
+    - generic [ref=e5]:
+      - img [ref=e6]
+      - button "中文" [ref=e9] [cursor=pointer]
+      - button "EN" [ref=e10] [cursor=pointer]
+      - button "ID" [ref=e11] [cursor=pointer]
+    - generic [ref=e13]:
+      - generic [ref=e14]:
+        - img "NOFX" [ref=e18]
+        - heading "Welcome to NOFX" [level=1] [ref=e19]
+        - paragraph [ref=e20]: Create your account to get started
+      - generic [ref=e22]:
+        - generic [ref=e23]:
+          - generic [ref=e24]: Email
+          - textbox "you@example.com" [active] [ref=e25]
+        - generic [ref=e26]:
+          - generic [ref=e27]: Password
+          - generic [ref=e28]:
+            - textbox "At least 8 characters" [ref=e29]
+            - button [ref=e30] [cursor=pointer]:
+              - img [ref=e31]
+        - generic [ref=e34]:
+          - generic [ref=e35]: Experience
+          - generic [ref=e36]:
+            - button "Beginner Mode Recommended Generate a Base wallet automatically and start with Claw402 + GLM by default." [ref=e37] [cursor=pointer]:
+              - generic [ref=e38]:
+                - generic [ref=e39]: Beginner Mode
+                - generic [ref=e40]: Recommended
+              - paragraph [ref=e41]: Generate a Base wallet automatically and start with Claw402 + GLM by default.
+            - button "Advanced Mode Keep the full manual flow and configure models, wallets, and exchanges yourself." [ref=e42] [cursor=pointer]:
+              - generic [ref=e44]: Advanced Mode
+              - paragraph [ref=e45]: Keep the full manual flow and configure models, wallets, and exchanges yourself.
+        - button "Get Started" [ref=e46] [cursor=pointer]
+      - paragraph [ref=e47]: Single-user system — this is the only account
