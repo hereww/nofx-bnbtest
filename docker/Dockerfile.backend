@@ -6,21 +6,22 @@
 # Versions extracted as ARGs for maintainability
 # ═══════════════════════════════════════════════════════════════
 
-ARG GO_VERSION=1.25-alpine
-ARG ALPINE_VERSION=latest
+ARG GO_VERSION=docker.1ms.run/library/golang:1.25-alpine
+ARG ALPINE_VERSION=docker.1ms.run/library/alpine:latest
 ARG TA_LIB_VERSION=0.4.0
 
 # ──────────────────────────────────────────────────────────────
 # TA-Lib Build Stage (shared across builds)
 # ──────────────────────────────────────────────────────────────
-FROM alpine:${ALPINE_VERSION} AS ta-lib-builder
+FROM ${ALPINE_VERSION} AS ta-lib-builder
 ARG TA_LIB_VERSION
 
+RUN sed -i 's|https://dl-cdn.alpinelinux.org/alpine|https://mirrors.aliyun.com/alpine|g' /etc/apk/repositories
 RUN apk update && apk add --no-cache \
     wget tar make gcc g++ musl-dev autoconf automake
 
-RUN wget http://prdownloads.sourceforge.net/ta-lib/ta-lib-${TA_LIB_VERSION}-src.tar.gz && \
-    tar -xzf ta-lib-${TA_LIB_VERSION}-src.tar.gz && \
+COPY third_party/ta-lib/ta-lib-${TA_LIB_VERSION}-src.tar.gz .
+RUN tar -xzf ta-lib-${TA_LIB_VERSION}-src.tar.gz && \
     cd ta-lib && \
     if [ "$(uname -m)" = "aarch64" ]; then \
         CONFIG_GUESS=$(find /usr/share -name config.guess | head -1) && \
@@ -36,8 +37,10 @@ RUN wget http://prdownloads.sourceforge.net/ta-lib/ta-lib-${TA_LIB_VERSION}-src.
 # ──────────────────────────────────────────────────────────────
 # Backend Build Stage (Go Application)
 # ──────────────────────────────────────────────────────────────
-FROM golang:${GO_VERSION} AS backend-builder
+FROM ${GO_VERSION} AS backend-builder
 
+ENV GOPROXY=https://goproxy.cn,direct
+RUN sed -i 's|https://dl-cdn.alpinelinux.org/alpine|https://mirrors.aliyun.com/alpine|g' /etc/apk/repositories
 RUN apk update && apk add --no-cache git make gcc g++ musl-dev
 
 COPY --from=ta-lib-builder /usr/local /usr/local
@@ -54,8 +57,9 @@ RUN CGO_ENABLED=1 GOOS=linux \
 # ──────────────────────────────────────────────────────────────
 # Runtime Stage (Minimal Executable Environment)
 # ──────────────────────────────────────────────────────────────
-FROM alpine:${ALPINE_VERSION}
+FROM ${ALPINE_VERSION}
 
+RUN sed -i 's|https://dl-cdn.alpinelinux.org/alpine|https://mirrors.aliyun.com/alpine|g' /etc/apk/repositories
 RUN apk update && apk add --no-cache ca-certificates tzdata sqlite
 
 COPY --from=ta-lib-builder /usr/local /usr/local

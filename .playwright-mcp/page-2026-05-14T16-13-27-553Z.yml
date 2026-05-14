@@ -1,0 +1,26 @@
+- generic [ref=e2]:
+  - generic [ref=e3]:
+    - generic [ref=e5]:
+      - heading "您的连接不是私密连接" [level=1] [ref=e6]
+      - paragraph [ref=e7]:
+        - text: 攻击者可能会试图从
+        - strong [ref=e8]: 192.168.100.241
+        - text: 窃取您的信息（例如：密码、消息或信用卡信息）。
+        - link "详细了解此警告" [ref=e9] [cursor=pointer]:
+          - /url: "#"
+      - button "net::ERR_CERT_AUTHORITY_INVALID" [ref=e11]
+    - generic [ref=e15]:
+      - link "开启增强型保护" [ref=e16] [cursor=pointer]:
+        - /url: "#"
+      - text: ，获享 Chrome 的最高级别安全防护
+  - generic [ref=e17]:
+    - button "返回安全连接" [ref=e18] [cursor=pointer]
+    - button "隐藏详情" [expanded] [active] [ref=e20] [cursor=pointer]
+  - generic [ref=e21]:
+    - paragraph [ref=e22]:
+      - text: 此服务器无法证明它是
+      - strong [ref=e23]: 192.168.100.241
+      - text: ；您计算机的操作系统不信任其安全证书。出现此问题的原因可能是配置有误或您的连接被拦截了。
+    - paragraph [ref=e24]:
+      - link "继续前往192.168.100.241（不安全）" [ref=e25] [cursor=pointer]:
+        - /url: "#"

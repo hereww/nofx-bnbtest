@@ -1,0 +1,316 @@
+- generic [ref=e1]:
+  - generic [ref=e4]:
+    - complementary [ref=e5]:
+      - generic [ref=e6]:
+        - generic [ref=e8] [cursor=pointer]:
+          - img [ref=e9]
+          - generic "双击可复制IP" [ref=e11]: 175.164.96.116
+          - generic [ref=e12]: "0"
+        - list [ref=e18]:
+          - listitem [ref=e19]:
+            - link "首页" [ref=e20] [cursor=pointer]:
+              - /url: /home
+              - img [ref=e21]
+              - generic [ref=e23]: 首页
+          - listitem [ref=e24]:
+            - link "网站" [ref=e25] [cursor=pointer]:
+              - /url: /site
+              - img [ref=e26]
+              - generic [ref=e28]: 网站
+          - listitem [ref=e29]:
+            - link "FTP" [ref=e30] [cursor=pointer]:
+              - /url: /ftp
+              - img [ref=e31]
+              - generic [ref=e33]: FTP
+          - listitem [ref=e34]:
+            - link "数据库" [ref=e35] [cursor=pointer]:
+              - /url: /database
+              - img [ref=e36]
+              - generic [ref=e38]: 数据库
+          - listitem [ref=e39]:
+            - link "Docker" [ref=e40] [cursor=pointer]:
+              - /url: /docker
+              - img [ref=e41]
+              - generic [ref=e43]: Docker
+          - listitem [ref=e44]:
+            - link "监控" [ref=e45] [cursor=pointer]:
+              - /url: /control
+              - img [ref=e46]
+              - generic [ref=e48]: 监控
+          - listitem [ref=e49]:
+            - link "安全" [ref=e50] [cursor=pointer]:
+              - /url: /firewall
+              - img [ref=e51]
+              - generic [ref=e53]: 安全
+          - listitem [ref=e54]:
+            - link "文件" [ref=e55] [cursor=pointer]:
+              - /url: /files
+              - img [ref=e56]
+              - generic [ref=e58]: 文件
+          - listitem [ref=e59]:
+            - link "日志" [ref=e60] [cursor=pointer]:
+              - /url: /logs
+              - img [ref=e61]
+              - generic [ref=e63]: 日志
+          - listitem [ref=e64]:
+            - link "多用户" [ref=e65] [cursor=pointer]:
+              - /url: /vhost
+              - img [ref=e66]
+              - generic [ref=e68]: 多用户
+          - listitem [ref=e69]:
+            - link "终端" [ref=e70] [cursor=pointer]:
+              - /url: /xterm
+              - img [ref=e71]
+              - generic [ref=e73]: 终端
+          - listitem [ref=e74]:
+            - link "计划任务" [active] [ref=e75] [cursor=pointer]:
+              - /url: /crontab
+              - img [ref=e76]
+              - generic [ref=e78]: 计划任务
+          - listitem [ref=e79]:
+            - link "软件商店" [ref=e80] [cursor=pointer]:
+              - /url: /soft
+              - img [ref=e81]
+              - generic [ref=e83]: 软件商店
+          - listitem [ref=e84]:
+            - link "设置" [ref=e85] [cursor=pointer]:
+              - /url: /config
+              - img [ref=e86]
+              - generic [ref=e88]: 设置
+          - listitem [ref=e89]:
+            - link "退出" [ref=e90] [cursor=pointer]:
+              - /url: javascript:;
+              - img [ref=e91]
+              - generic [ref=e93]: 退出
+        - generic [ref=e95]:
+          - generic [ref=e98] [cursor=pointer]: 
+          - generic [ref=e101] [cursor=pointer]: 
+    - generic [ref=e102]:
+      - generic [ref=e521]:
+        - generic [ref=e522]:
+          - generic [ref=e523]:
+            - generic [ref=e524] [cursor=pointer]: 计划任务
+            - generic [ref=e525] [cursor=pointer]: 脚本库
+          - generic [ref=e526]:
+            - generic [ref=e527] [cursor=pointer]: 企业版
+            - generic [ref=e528]: 2028-05-13
+            - generic [ref=e529] [cursor=pointer]: 续费
+        - generic [ref=e533]:
+          - generic [ref=e534]:
+            - generic [ref=e535]:
+              - button "添加任务" [ref=e536] [cursor=pointer]:
+                - generic [ref=e537]: 添加任务
+              - button "导入" [ref=e538] [cursor=pointer]:
+                - generic [ref=e539]: 导入
+              - button "导出" [ref=e540] [cursor=pointer]:
+                - generic [ref=e541]: 导出
+              - button "日志切割设置" [ref=e542] [cursor=pointer]:
+                - generic [ref=e543]: 日志切割设置
+              - generic [ref=e544]:
+                - generic [ref=e545]: 
+                - generic [ref=e546] [cursor=pointer]: 需求反馈
+            - generic [ref=e548]:
+              - generic [ref=e550] [cursor=pointer]:
+                - generic:
+                  - combobox [ref=e552]
+                  - generic [ref=e555]: 全部分类
+                - img [ref=e558]
+              - generic [ref=e561]:
+                - textbox "支持任务名称模糊搜索" [ref=e563]
+                - button "" [ref=e565] [cursor=pointer]:
+                  - generic [ref=e567]: 
+              - button "" [ref=e568] [cursor=pointer]:
+                - generic [ref=e570]: 
+              - button "" [ref=e573] [cursor=pointer]:
+                - generic [ref=e575]: 
+          - generic [ref=e578]:
+            - table [ref=e580]:
+              - rowgroup [ref=e593]:
+                - row "任务名称 分类 状态 执行周期 保存数量 备份到 备份路径 上次执行时间 操作" [ref=e594]:
+                  - columnheader [ref=e595]:
+                    - generic [ref=e599] [cursor=pointer]:
+                      - checkbox
+                  - columnheader [ref=e601]
+                  - columnheader "任务名称" [ref=e602] [cursor=pointer]:
+                    - generic [ref=e604]: 任务名称
+                  - columnheader "分类" [ref=e608]:
+                    - generic [ref=e610]: 分类
+                  - columnheader "状态" [ref=e611] [cursor=pointer]:
+                    - generic [ref=e613]: 状态
+                  - columnheader "执行周期" [ref=e617]:
+                    - generic [ref=e619]: 执行周期
+                  - columnheader "保存数量" [ref=e620]:
+                    - generic [ref=e622]: 保存数量
+                  - columnheader "备份到" [ref=e623]:
+                    - generic [ref=e625]: 备份到
+                  - columnheader "备份路径" [ref=e626]:
+                    - generic [ref=e628]: 备份路径
+                  - columnheader "上次执行时间" [ref=e629] [cursor=pointer]:
+                    - generic [ref=e631]: 上次执行时间
+                  - columnheader "操作" [ref=e635]:
+                    - generic [ref=e637]: 操作
+            - table [ref=e642]:
+              - rowgroup [ref=e655]:
+                - row " 续签Let's Encrypt证书 默认分类 正常  每天的13:25执行一次 -- -- -- 2026-05-14 13:25:02 执行 编辑 日志 复制 删除" [ref=e656]:
+                  - cell [ref=e657]:
+                    - generic [ref=e660] [cursor=pointer]:
+                      - checkbox
+                  - cell "" [ref=e662]:
+                    - generic [ref=e665] [cursor=pointer]: 
+                  - cell "续签Let's Encrypt证书" [ref=e666]:
+                    - generic [ref=e667]: 续签Let's Encrypt证书
+                  - cell "默认分类" [ref=e668]:
+                    - generic [ref=e669]: 默认分类
+                  - cell "正常 " [ref=e670]:
+                    - generic [ref=e673] [cursor=pointer]:
+                      - generic [ref=e674]: 正常
+                      - generic [ref=e675]: 
+                  - cell "每天的13:25执行一次" [ref=e676]:
+                    - generic [ref=e677]: 每天的13:25执行一次
+                  - cell "--" [ref=e678]:
+                    - generic [ref=e679]: "--"
+                  - cell "--" [ref=e680]:
+                    - generic [ref=e681]: "--"
+                  - cell "--" [ref=e682]:
+                    - generic [ref=e683]: "--"
+                  - cell "2026-05-14 13:25:02" [ref=e684]:
+                    - generic [ref=e685]: 2026-05-14 13:25:02
+                  - cell "执行 编辑 日志 复制 删除" [ref=e686]:
+                    - generic [ref=e688]:
+                      - text: 执行
+                      - separator [ref=e689]
+                      - text: 编辑
+                      - separator [ref=e690]
+                      - text: 日志
+                      - separator [ref=e691]
+                      - text: 复制
+                      - separator [ref=e692]
+                      - text: 删除
+                - row " [勿删]资源管理器-获取进程流量 正常  每小时的第0分钟开始，每隔5分钟执行一次 -- -- -- 2026-05-15 00:25:01 执行 编辑 日志 复制 删除" [ref=e693]:
+                  - cell [ref=e694]:
+                    - generic [ref=e697] [cursor=pointer]:
+                      - checkbox
+                  - cell "" [ref=e699]:
+                    - generic [ref=e702] [cursor=pointer]: 
+                  - cell "[勿删]资源管理器-获取进程流量" [ref=e703]:
+                    - generic [ref=e704]: "[勿删]资源管理器-获取进程流量"
+                  - cell [ref=e705]
+                  - cell "正常 " [ref=e707]:
+                    - generic [ref=e710] [cursor=pointer]:
+                      - generic [ref=e711]: 正常
+                      - generic [ref=e712]: 
+                  - cell "每小时的第0分钟开始，每隔5分钟执行一次" [ref=e713]:
+                    - generic [ref=e714]: 每小时的第0分钟开始，每隔5分钟执行一次
+                  - cell "--" [ref=e715]:
+                    - generic [ref=e716]: "--"
+                  - cell "--" [ref=e717]:
+                    - generic [ref=e718]: "--"
+                  - cell "--" [ref=e719]:
+                    - generic [ref=e720]: "--"
+                  - cell "2026-05-15 00:25:01" [ref=e721]:
+                    - generic [ref=e722]: 2026-05-15 00:25:01
+                  - cell "执行 编辑 日志 复制 删除" [ref=e723]:
+                    - generic [ref=e725]:
+                      - text: 执行
+                      - separator [ref=e726]
+                      - text: 编辑
+                      - separator [ref=e727]
+                      - text: 日志
+                      - separator [ref=e728]
+                      - text: 复制
+                      - separator [ref=e729]
+                      - text: 删除
+                - row " [勿删]资源管理器-获取进程流量 正常  每小时的第0分钟开始，每隔5分钟执行一次 -- -- -- 2026-05-15 00:25:01 执行 编辑 日志 复制 删除" [ref=e730]:
+                  - cell [ref=e731]:
+                    - generic [ref=e734] [cursor=pointer]:
+                      - checkbox
+                  - cell "" [ref=e736]:
+                    - generic [ref=e739] [cursor=pointer]: 
+                  - cell "[勿删]资源管理器-获取进程流量" [ref=e740]:
+                    - generic [ref=e741]: "[勿删]资源管理器-获取进程流量"
+                  - cell [ref=e742]
+                  - cell "正常 " [ref=e744]:
+                    - generic [ref=e747] [cursor=pointer]:
+                      - generic [ref=e748]: 正常
+                      - generic [ref=e749]: 
+                  - cell "每小时的第0分钟开始，每隔5分钟执行一次" [ref=e750]:
+                    - generic [ref=e751]: 每小时的第0分钟开始，每隔5分钟执行一次
+                  - cell "--" [ref=e752]:
+                    - generic [ref=e753]: "--"
+                  - cell "--" [ref=e754]:
+                    - generic [ref=e755]: "--"
+                  - cell "--" [ref=e756]:
+                    - generic [ref=e757]: "--"
+                  - cell "2026-05-15 00:25:01" [ref=e758]:
+                    - generic [ref=e759]: 2026-05-15 00:25:01
+                  - cell "执行 编辑 日志 复制 删除" [ref=e760]:
+                    - generic [ref=e762]:
+                      - text: 执行
+                      - separator [ref=e763]
+                      - text: 编辑
+                      - separator [ref=e764]
+                      - text: 日志
+                      - separator [ref=e765]
+                      - text: 复制
+                      - separator [ref=e766]
+                      - text: 删除
+          - generic [ref=e767]:
+            - generic [ref=e769]:
+              - generic [ref=e771] [cursor=pointer]:
+                - checkbox
+              - generic [ref=e773]:
+                - generic [ref=e777]:
+                  - generic [ref=e778]: 请选择批量操作
+                  - img [ref=e781]
+                - button "批量操作" [disabled] [ref=e783]:
+                  - generic [ref=e784]: 批量操作
+            - generic [ref=e786]:
+              - button "上一页" [disabled] [ref=e787]:
+                - generic:
+                  - img
+              - list [ref=e788]:
+                - listitem "第 1 页" [ref=e789]: "1"
+              - button "下一页" [disabled] [ref=e790]:
+                - generic:
+                  - img
+              - generic [ref=e793] [cursor=pointer]:
+                - generic:
+                  - combobox [ref=e795]
+                  - generic [ref=e796]: 20条/页
+                - img [ref=e799]
+              - generic [ref=e801]: 共 3 条
+              - generic [ref=e802]:
+                - generic [ref=e803]: 前往
+                - spinbutton "页" [ref=e806]: "1"
+                - generic [ref=e807]: 页
+      - generic [ref=e214]:
+        - generic [ref=e215]: 宝塔Linux面板©2014-2026 广东堡塔安全技术有限公司 (bt.cn)
+        - separator [ref=e216]
+        - link "论坛求助" [ref=e217] [cursor=pointer]:
+          - /url: http://www.bt.cn/bbs
+          - generic [ref=e218]:
+            - img [ref=e219]
+            - generic [ref=e221]: 论坛求助
+        - separator [ref=e222]
+        - link "使用手册" [ref=e223] [cursor=pointer]:
+          - /url: https://docs.bt.cn
+          - generic [ref=e224]:
+            - img [ref=e225]
+            - generic [ref=e227]: 使用手册
+        - separator [ref=e228]
+        - generic [ref=e229]:
+          - img [ref=e230]
+          - generic [ref=e232] [cursor=pointer]: 微信公众号
+        - separator [ref=e233]
+        - link "正版查询" [ref=e234] [cursor=pointer]:
+          - /url: https://www.bt.cn/auth
+          - generic [ref=e235]:
+            - img [ref=e236]
+            - generic [ref=e238]: 正版查询
+        - separator [ref=e239]
+        - generic [ref=e240]:
+          - img [ref=e241]
+          - generic [ref=e243] [cursor=pointer]: 联系人工客服
+    - text:  
+  - img
+  - generic: 

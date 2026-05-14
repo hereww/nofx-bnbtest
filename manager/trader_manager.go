@@ -631,7 +631,52 @@ func (tm *TraderManager) addTraderFromStore(traderCfg *store.Trader, aiModelCfg 
 		return fmt.Errorf("trader %s has no strategy configured", traderCfg.Name)
 	}
 
-	// Build AutoTraderConfig (ai500APIURL/oiTopAPIURL obtained from strategy config, used in StrategyEngine)
+	traderConfig := buildAutoTraderConfig(traderCfg, aiModelCfg, exchangeCfg, strategyConfig)
+
+	logger.Infof("📊 Loading trader %s: ScanIntervalMinutes=%d (from DB), ScanInterval=%v",
+		traderCfg.Name, traderCfg.ScanIntervalMinutes, traderConfig.ScanInterval)
+
+	traderConfig.Claw402WalletKey = resolveTraderDataWalletKey(st, traderCfg.UserID, aiModelCfg)
+
+	// Create trader instance
+	at, err := trader.NewAutoTrader(traderConfig, st, traderCfg.UserID)
+	if err != nil {
+		return fmt.Errorf("failed to create trader: %w", err)
+	}
+
+	// Set custom prompt (if exists)
+	if traderCfg.CustomPrompt != "" {
+		at.SetCustomPrompt(traderCfg.CustomPrompt)
+		at.SetOverrideBasePrompt(traderCfg.OverrideBasePrompt)
+		if traderCfg.OverrideBasePrompt {
+			logger.Infof("✓ Set custom trading strategy prompt (overriding base prompt)")
+		} else {
+			logger.Infof("✓ Set custom trading strategy prompt (supplementing base prompt)")
+		}
+	}
+
+	tm.traders[traderCfg.ID] = at
+	logger.Infof("✓ Trader '%s' (%s + %s/%s) loaded to memory", traderCfg.Name, aiModelCfg.Provider, exchangeCfg.ExchangeType, exchangeCfg.AccountName)
+
+	// Auto-start if trader was running before shutdown
+	if traderCfg.IsRunning {
+		logger.Infof("%s 🔄 Auto-starting trader (was running before shutdown)...", traderLogTag(traderCfg.ID, traderCfg.Name))
+		go func(trader *trader.AutoTrader, traderName, traderID, userID string) {
+			if err := trader.Run(); err != nil {
+				logger.Warnf("%s trader stopped with error: %v", traderLogTag(traderID, traderName), err)
+				// Update database to reflect stopped state
+				if st != nil {
+					_ = st.Trader().UpdateStatus(userID, traderID, false)
+				}
+			}
+		}(at, traderCfg.Name, traderCfg.ID, traderCfg.UserID)
+		logger.Infof("%s ✅ Trader auto-started successfully", traderLogTag(traderCfg.ID, traderCfg.Name))
+	}
+
+	return nil
+}
+
+func buildAutoTraderConfig(traderCfg *store.Trader, aiModelCfg *store.AIModel, exchangeCfg *store.Exchange, strategyConfig *store.StrategyConfig) trader.AutoTraderConfig {
 	traderConfig := trader.AutoTraderConfig{
 		ID:                    traderCfg.ID,
 		Name:                  traderCfg.Name,
@@ -640,6 +685,7 @@ func (tm *TraderManager) addTraderFromStore(traderCfg *store.Trader, aiModelCfg 
 		ExchangeID:            exchangeCfg.ID,           // Exchange account UUID (for multi-account)
 		BinanceAPIKey:         "",
 		BinanceSecretKey:      "",
+		BinanceTestnet:        exchangeCfg.Testnet,
 		HyperliquidPrivateKey: "",
 		HyperliquidTestnet:    exchangeCfg.Testnet,
 		UseQwen:               aiModelCfg.Provider == "qwen",
@@ -653,9 +699,6 @@ func (tm *TraderManager) addTraderFromStore(traderCfg *store.Trader, aiModelCfg 
 		ShowInCompetition:     traderCfg.ShowInCompetition,
 		StrategyConfig:        strategyConfig,
 	}
-
-	logger.Infof("📊 Loading trader %s: ScanIntervalMinutes=%d (from DB), ScanInterval=%v",
-		traderCfg.Name, traderCfg.ScanIntervalMinutes, traderConfig.ScanInterval)
 
 	// Set API keys based on exchange type (convert EncryptedString to string)
 	switch exchangeCfg.ExchangeType {
@@ -710,44 +753,7 @@ func (tm *TraderManager) addTraderFromStore(traderCfg *store.Trader, aiModelCfg 
 		traderConfig.CustomAPIKey = string(aiModelCfg.APIKey)
 	}
 
-	traderConfig.Claw402WalletKey = resolveTraderDataWalletKey(st, traderCfg.UserID, aiModelCfg)
-
-	// Create trader instance
-	at, err := trader.NewAutoTrader(traderConfig, st, traderCfg.UserID)
-	if err != nil {
-		return fmt.Errorf("failed to create trader: %w", err)
-	}
-
-	// Set custom prompt (if exists)
-	if traderCfg.CustomPrompt != "" {
-		at.SetCustomPrompt(traderCfg.CustomPrompt)
-		at.SetOverrideBasePrompt(traderCfg.OverrideBasePrompt)
-		if traderCfg.OverrideBasePrompt {
-			logger.Infof("✓ Set custom trading strategy prompt (overriding base prompt)")
-		} else {
-			logger.Infof("✓ Set custom trading strategy prompt (supplementing base prompt)")
-		}
-	}
-
-	tm.traders[traderCfg.ID] = at
-	logger.Infof("✓ Trader '%s' (%s + %s/%s) loaded to memory", traderCfg.Name, aiModelCfg.Provider, exchangeCfg.ExchangeType, exchangeCfg.AccountName)
-
-	// Auto-start if trader was running before shutdown
-	if traderCfg.IsRunning {
-		logger.Infof("%s 🔄 Auto-starting trader (was running before shutdown)...", traderLogTag(traderCfg.ID, traderCfg.Name))
-		go func(trader *trader.AutoTrader, traderName, traderID, userID string) {
-			if err := trader.Run(); err != nil {
-				logger.Warnf("%s trader stopped with error: %v", traderLogTag(traderID, traderName), err)
-				// Update database to reflect stopped state
-				if st != nil {
-					_ = st.Trader().UpdateStatus(userID, traderID, false)
-				}
-			}
-		}(at, traderCfg.Name, traderCfg.ID, traderCfg.UserID)
-		logger.Infof("%s ✅ Trader auto-started successfully", traderLogTag(traderCfg.ID, traderCfg.Name))
-	}
-
-	return nil
+	return traderConfig
 }
 
 func resolveTraderDataWalletKey(st *store.Store, userID string, selectedModel *store.AIModel) string {

@@ -5,13 +5,14 @@
 # Versions extracted as ARGs for consistency
 # ═══════════════════════════════════════════════════════════════
 
-ARG NODE_VERSION=20-alpine
-ARG NGINX_VERSION=alpine
+ARG NODE_VERSION=docker.1ms.run/library/node:20-alpine
+ARG NGINX_VERSION=docker.1ms.run/library/nginx:alpine
 
 # ──────────────────────────────────────────────────────────────
 # Build Stage (Node)
 # ──────────────────────────────────────────────────────────────
-FROM node:${NODE_VERSION} AS builder
+FROM ${NODE_VERSION} AS builder
+RUN sed -i 's|https://dl-cdn.alpinelinux.org/alpine|https://mirrors.aliyun.com/alpine|g' /etc/apk/repositories
 WORKDIR /build
 
 COPY web/package*.json ./
@@ -23,7 +24,8 @@ RUN npm run build
 # ──────────────────────────────────────────────────────────────
 # Runtime Stage (Nginx)
 # ──────────────────────────────────────────────────────────────
-FROM nginx:${NGINX_VERSION}
+FROM ${NGINX_VERSION}
+RUN sed -i 's|https://dl-cdn.alpinelinux.org/alpine|https://mirrors.aliyun.com/alpine|g' /etc/apk/repositories
 
 COPY nginx/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=builder /build/dist /usr/share/nginx/html

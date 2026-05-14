@@ -40,7 +40,7 @@ print_error() {
 # Detection: Docker Compose Command (Backward Compatible)
 # ------------------------------------------------------------------------
 detect_compose_cmd() {
-    if command -v docker compose &> /dev/null; then
+    if docker compose version &> /dev/null; then
         COMPOSE_CMD="docker compose"
     elif command -v docker-compose &> /dev/null; then
         COMPOSE_CMD="docker-compose"

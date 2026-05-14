@@ -23,7 +23,7 @@ import (
 // Inherits TraderTestSuite and adds Binance Futures specific mock logic
 type BinanceFuturesTestSuite struct {
 	*testutil.TraderTestSuite // Embeds base test suite
-	mockServer              *httptest.Server
+	mockServer                *httptest.Server
 }
 
 // NewBinanceFuturesTestSuite Creates Binance Futures test suite
@@ -354,6 +354,14 @@ func TestNewFuturesTrader(t *testing.T) {
 	assert.NotNil(t, t1)
 	assert.NotNil(t, t1.client)
 	assert.Equal(t, 15*time.Second, t1.cacheDuration)
+}
+
+func TestNewFuturesClientSelectsNetworkEndpoint(t *testing.T) {
+	mainnetClient := newFuturesClient("test_api_key", "test_secret_key", false)
+	assert.Equal(t, futures.BaseApiMainUrl, mainnetClient.BaseURL)
+
+	testnetClient := newFuturesClient("test_api_key", "test_secret_key", true)
+	assert.Equal(t, futures.BaseApiTestnetUrl, testnetClient.BaseURL)
 }
 
 // TestCalculatePositionSize tests position size calculation
