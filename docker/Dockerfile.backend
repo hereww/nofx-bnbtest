@@ -6,8 +6,8 @@
 # Versions extracted as ARGs for maintainability
 # ═══════════════════════════════════════════════════════════════
 
-ARG GO_VERSION=docker.1ms.run/library/golang:1.25-alpine
-ARG ALPINE_VERSION=docker.1ms.run/library/alpine:latest
+ARG GO_VERSION=m.daocloud.io/docker.io/library/golang:1.25-alpine
+ARG ALPINE_VERSION=m.daocloud.io/docker.io/library/alpine:3.20
 ARG TA_LIB_VERSION=0.4.0
 
 # ──────────────────────────────────────────────────────────────

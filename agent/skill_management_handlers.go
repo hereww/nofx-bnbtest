@@ -2365,7 +2365,7 @@ func credentialLooksCompatibleWithProvider(provider, value string) bool {
 	}
 
 	switch provider {
-	case "claw402", "blockrun-base", "blockrun-sol":
+	case "blockrun-base", "blockrun-sol":
 		return hexCredentialPattern.MatchString(value)
 	case "openai":
 		return openAIAPIKeyPattern.MatchString(value)

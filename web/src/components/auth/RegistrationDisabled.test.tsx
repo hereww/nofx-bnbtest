@@ -48,7 +48,7 @@ describe('RegistrationDisabled Component', () => {
 
     it('should display the NoFx logo', () => {
       renderComponent()
-      const logo = screen.getByAltText('NoFx Logo')
+      const logo = screen.getByAltText('NOFXi Logo')
       expect(logo).toBeTruthy()
       expect(logo.getAttribute('src')).toBe('/icons/nofx.svg')
     })

@@ -167,8 +167,8 @@ func (a *Agent) loadAIClientFromStoreUser(storeUserID string) (mcp.AIClient, str
 			modelName := strings.TrimSpace(model.CustomModelName)
 			provider := strings.ToLower(strings.TrimSpace(model.Provider))
 
-			// Use the provider registry for providers like claw402 that have their own
-			// client implementation (x402 payment, custom auth, etc.).
+			// Use the provider registry for providers that have their own client
+			// implementation (custom auth, compatible endpoint defaults, etc.).
 			if client := mcp.NewAIClientByProvider(provider); client != nil {
 				if modelName == "" {
 					modelName = model.ID
@@ -278,7 +278,7 @@ func agentModelUSDCBalance(model *store.AIModel) (float64, bool) {
 
 func agentProviderSupportsUSDCBalance(provider string) bool {
 	switch strings.ToLower(strings.TrimSpace(provider)) {
-	case "claw402", "blockrun-base":
+	case "blockrun-base":
 		return true
 	default:
 		return false
@@ -342,7 +342,6 @@ func resolveModelRuntimeConfig(provider, customAPIURL, customModelName, fallback
 		"grok":     {url: "https://api.x.ai/v1", model: "grok-3-latest"},
 		"kimi":     {url: "https://api.moonshot.ai/v1", model: "moonshot-v1-auto"},
 		"minimax":  {url: "https://api.minimax.chat/v1", model: "MiniMax-M2.5"},
-		"claw402":  {url: "https://claw402.ai", model: "deepseek"},
 	}
 
 	if customAPIURL == "" {
@@ -440,9 +439,6 @@ func (a *Agent) handleMessageForStoreUser(ctx context.Context, storeUserID strin
 	if reply, handled := a.handleTradeConfirmation(ctx, userID, text, lang); handled {
 		return reply, nil
 	}
-	if reply, handled := a.handleModelWalletBalanceQuestion(storeUserID, lang, text); handled {
-		return reply, nil
-	}
 
 	// Everything else goes through the planner and tool system.
 	return a.thinkAndAct(ctx, storeUserID, userID, lang, text)
@@ -485,12 +481,6 @@ func (a *Agent) handleMessageStreamForStoreUser(ctx context.Context, storeUserID
 		return "🧹 Conversation history cleared.", nil
 	}
 	if reply, handled := a.handleTradeConfirmation(ctx, userID, text, lang); handled {
-		if onEvent != nil {
-			emitStreamText(onEvent, reply)
-		}
-		return reply, nil
-	}
-	if reply, handled := a.handleModelWalletBalanceQuestion(storeUserID, lang, text); handled {
 		if onEvent != nil {
 			emitStreamText(onEvent, reply)
 		}

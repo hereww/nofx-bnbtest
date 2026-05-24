@@ -23,7 +23,7 @@ var (
 	genericAPIKeyPattern   = regexp.MustCompile(`^[A-Za-z0-9_\-]{8,}$`)
 	hexCredentialPattern   = regexp.MustCompile(`^(0x)?[A-Fa-f0-9]{16,}$`)
 	supportedModelProvider = map[string]struct{}{
-		"openai": {}, "deepseek": {}, "claude": {}, "gemini": {}, "qwen": {}, "kimi": {}, "grok": {}, "minimax": {}, "claw402": {}, "blockrun-base": {}, "blockrun-sol": {},
+		"openai": {}, "deepseek": {}, "claude": {}, "gemini": {}, "qwen": {}, "kimi": {}, "grok": {}, "minimax": {}, "blockrun-base": {}, "blockrun-sol": {},
 	}
 )
 
@@ -289,7 +289,7 @@ func formatValidationFeedback(lang, domain string, err error) string {
 		case strings.Contains(lower, "cannot enable model config before a usable api key, url, and model are configured"):
 			return "这份配置还有问题：要先把 API Key、接口地址和模型名称配完整，才能启用。你可以继续把缺的字段发给我。"
 		case strings.Contains(lower, "unsupported provider"):
-			return "这份配置还有问题：provider 不在支持范围内。请从 OpenAI、DeepSeek、Claude、Gemini、Qwen、Kimi、Grok、Minimax 里选一个。"
+			return "这份配置还有问题：provider 不在支持范围内。请从 OpenAI、DeepSeek、Claude、Gemini、Qwen、Kimi、Grok、Minimax、BlockRun 里选一个。"
 		case strings.Contains(lower, "invalid custom_api_url"):
 			return "这份配置还有问题：接口地址格式不对。请给我完整的 URL，或直接说使用默认地址。"
 		case strings.Contains(lower, "ai model is disabled"):

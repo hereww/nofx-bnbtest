@@ -1,5 +1,4 @@
-// NOFX Official Branding Constants
-// These values are integrity-checked and should not be modified by forked projects
+// NOFXi branding constants for this secondary-development project.
 
 // Base64 encoded official links (integrity protected)
 const _b = atob
@@ -7,9 +6,10 @@ const _e = (s: string) => btoa(s)
 
 // Encoded official links - tampering will break functionality
 const ENCODED_LINKS = {
-  twitter: 'aHR0cHM6Ly94LmNvbS9ub2Z4X29mZmljaWFs', // https://x.com/nofx_official
-  telegram: 'aHR0cHM6Ly90Lm1lL25vZnhfZGV2X2NvbW11bml0eQ==', // https://t.me/nofx_dev_community
-  github: 'aHR0cHM6Ly9naXRodWIuY29tL3RpbmtsZS1jb21tdW5pdHkvbm9meA==', // https://github.com/NoFxAiOS/nofx
+  twitter: 'aHR0cHM6Ly94LmNvbS9ub2Z4X29mZmljaWFs',
+  telegram: 'aHR0cHM6Ly90Lm1lL25vZnhfZGV2X2NvbW11bml0eQ==',
+  github: 'aHR0cHM6Ly9naXRodWIuY29tL2hlcmV3dy9ub2Z4LWJuYnRlc3Q=',
+  upstream: 'aHR0cHM6Ly9naXRodWIuY29tL05vRnhBaU9TL25vZng=',
 }
 
 // Integrity checksums (simple hash)
@@ -41,7 +41,8 @@ function getVerifiedLink(key: keyof typeof ENCODED_LINKS): string {
     const fallbacks: Record<string, string> = {
       twitter: 'https://x.com/nofx_official',
       telegram: 'https://t.me/nofx_dev_community',
-      github: 'https://github.com/NoFxAiOS/nofx',
+      github: 'https://github.com/hereww/nofx-bnbtest',
+      upstream: 'https://github.com/NoFxAiOS/nofx',
     }
     return fallbacks[key] || ''
   }
@@ -52,12 +53,13 @@ export const OFFICIAL_LINKS = {
   get twitter() { return getVerifiedLink('twitter') },
   get telegram() { return getVerifiedLink('telegram') },
   get github() { return getVerifiedLink('github') },
+  get upstream() { return getVerifiedLink('upstream') },
 } as const
 
 // Brand watermark component data
 export const BRAND_INFO = {
-  name: 'NOFX',
-  tagline: 'AI Trading Platform',
+  name: 'NOFXi',
+  tagline: 'AI Quant Trading Assistant',
   version: '1.0.0',
   // Links embedded in multiple formats for redundancy
   social: {

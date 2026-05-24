@@ -24,8 +24,8 @@ export function OnboardingModeSelector({
       title: isZh ? '新手模式' : 'Beginner Mode',
       badge: isZh ? '推荐' : 'Recommended',
       description: isZh
-        ? '自动生成 Base 钱包，默认接入 Claw402 + GLM，最快完成首次启动。'
-        : 'Generate a Base wallet automatically and start with Claw402 + GLM by default.',
+        ? '使用自配模型 API Key 和默认策略，按步骤完成首次启动。'
+        : 'Use your own model API key and the default strategy to complete the first launch step by step.',
     },
     {
       id: 'advanced',

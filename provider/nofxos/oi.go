@@ -25,6 +25,8 @@ type OIPosition struct {
 // OIRankingResponse is the API response structure for OI ranking
 type OIRankingResponse struct {
 	Success bool `json:"success"`
+	Error   string `json:"error,omitempty"`
+	Message string `json:"message,omitempty"`
 	Code    int  `json:"code"`
 	Data    struct {
 		Positions      []OIPosition `json:"positions"`
@@ -96,9 +98,9 @@ func (c *Client) fetchOIRanking(rankType, duration string, limit int) ([]OIPosit
 		return nil, "", fmt.Errorf("JSON parsing failed: %w", err)
 	}
 
-	// Check for success (support both success field and code field)
-	if !response.Success && response.Code != 0 {
-		return nil, "", fmt.Errorf("API returned error code: %d", response.Code)
+	// Check for success (support both success field and code field).
+	if !response.Success && (response.Code != 0 || response.Error != "" || response.Message != "") {
+		return nil, "", fmt.Errorf("API returned failure status: %s", failureMessage(body))
 	}
 
 	return response.Data.Positions, response.Data.TimeRange, nil

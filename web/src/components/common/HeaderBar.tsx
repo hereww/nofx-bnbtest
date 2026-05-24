@@ -92,8 +92,8 @@ export default function HeaderBar({
           }}
           className="flex items-center gap-2 hover:opacity-80 transition-opacity cursor-pointer"
         >
-          <img src="/icons/nofx.svg" alt="NOFX Logo" className="w-7 h-7" />
-          <span className="text-lg font-bold text-nofx-gold">NOFX</span>
+          <img src="/icons/nofx.svg" alt="NOFXi Logo" className="w-7 h-7" />
+          <span className="text-lg font-bold text-nofx-gold">NOFXi</span>
         </div>
 
         {/* Desktop Menu */}
@@ -127,6 +127,17 @@ export default function HeaderBar({
                       : language === 'id'
                         ? 'Data'
                         : 'Data',
+                  requiresAuth: false,
+                },
+                {
+                  page: 'onchain',
+                  path: ROUTES.onchain,
+                  label:
+                    language === 'zh'
+                      ? '链上分析'
+                      : language === 'id'
+                        ? 'On-chain'
+                        : 'On-chain',
                   requiresAuth: false,
                 },
                 {
@@ -462,6 +473,17 @@ export default function HeaderBar({
                           : language === 'id'
                             ? 'Data'
                             : 'Data',
+                      requiresAuth: false,
+                    },
+                    {
+                      page: 'onchain',
+                      path: ROUTES.onchain,
+                      label:
+                        language === 'zh'
+                          ? '链上分析'
+                          : language === 'id'
+                            ? 'On-chain'
+                            : 'On-chain',
                       requiresAuth: false,
                     },
                     {

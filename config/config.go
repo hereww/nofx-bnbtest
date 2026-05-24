@@ -1,8 +1,8 @@
 package config
 
 import (
-	"nofx/telemetry"
 	"nofx/mcp"
+	"nofx/telemetry"
 	"os"
 	"strconv"
 	"strings"
@@ -39,10 +39,18 @@ type Config struct {
 	ExperienceImprovement bool
 
 	// Market data provider API keys
-	AlpacaAPIKey    string // Alpaca API key for US stocks
-	AlpacaSecretKey string // Alpaca secret key
-	TwelveDataKey   string // TwelveData API key for forex & metals
+	AlpacaAPIKey     string // Alpaca API key for US stocks
+	AlpacaSecretKey  string // Alpaca secret key
+	TwelveDataKey    string // TwelveData API key for forex & metals
+	DataGatewayURL   string // Self-hosted NofxOS-compatible data gateway
+	DataGatewayToken string // Optional token for the self-hosted data gateway
+	MarketHTTPProxy  string // Optional proxy for external market APIs such as DexScreener
 
+	// On-chain token analysis
+	OnchainIndexerEnabled             bool
+	OnchainBSCArchiveRPCURL           string
+	OnchainIndexerPollIntervalSeconds int
+	OnchainIndexerBatchBlocks         int
 }
 
 // Init initializes global configuration (from .env)
@@ -51,13 +59,15 @@ func Init() {
 		APIServerPort:         8080,
 		ExperienceImprovement: true, // Default: enabled to help improve the product
 		// Database defaults
-		DBType:    "sqlite",
-		DBPath:    "data/data.db",
-		DBHost:    "localhost",
-		DBPort:    5432,
-		DBUser:    "postgres",
-		DBName:    "nofx",
-		DBSSLMode: "disable",
+		DBType:                            "sqlite",
+		DBPath:                            "data/data.db",
+		DBHost:                            "localhost",
+		DBPort:                            5432,
+		DBUser:                            "postgres",
+		DBName:                            "nofx",
+		DBSSLMode:                         "disable",
+		OnchainIndexerPollIntervalSeconds: 15,
+		OnchainIndexerBatchBlocks:         2000,
 	}
 
 	// Load from environment variables
@@ -90,6 +100,26 @@ func Init() {
 	cfg.AlpacaAPIKey = os.Getenv("ALPACA_API_KEY")
 	cfg.AlpacaSecretKey = os.Getenv("ALPACA_SECRET_KEY")
 	cfg.TwelveDataKey = os.Getenv("TWELVEDATA_API_KEY")
+	cfg.DataGatewayURL = strings.TrimRight(os.Getenv("DATA_GATEWAY_URL"), "/")
+	if cfg.DataGatewayURL == "" {
+		cfg.DataGatewayURL = "http://127.0.0.1:8090"
+	}
+	cfg.DataGatewayToken = strings.TrimSpace(os.Getenv("DATA_GATEWAY_TOKEN"))
+	cfg.MarketHTTPProxy = firstNonEmptyEnv("ONCHAIN_HTTP_PROXY", "MARKET_HTTP_PROXY", "HTTPS_PROXY", "HTTP_PROXY")
+	if v := os.Getenv("ONCHAIN_INDEXER_ENABLED"); v != "" {
+		cfg.OnchainIndexerEnabled = strings.ToLower(strings.TrimSpace(v)) == "true"
+	}
+	cfg.OnchainBSCArchiveRPCURL = strings.TrimSpace(os.Getenv("ONCHAIN_BSC_ARCHIVE_RPC_URL"))
+	if v := os.Getenv("ONCHAIN_INDEXER_POLL_INTERVAL_SECONDS"); v != "" {
+		if seconds, err := strconv.Atoi(v); err == nil && seconds > 0 {
+			cfg.OnchainIndexerPollIntervalSeconds = seconds
+		}
+	}
+	if v := os.Getenv("ONCHAIN_INDEXER_BATCH_BLOCKS"); v != "" {
+		if blocks, err := strconv.Atoi(v); err == nil && blocks > 0 {
+			cfg.OnchainIndexerBatchBlocks = blocks
+		}
+	}
 
 	// Database configuration
 	if v := os.Getenv("DB_TYPE"); v != "" {
@@ -142,4 +172,13 @@ func Get() *Config {
 		Init()
 	}
 	return global
+}
+
+func firstNonEmptyEnv(keys ...string) string {
+	for _, key := range keys {
+		if value := strings.TrimSpace(os.Getenv(key)); value != "" {
+			return value
+		}
+	}
+	return ""
 }

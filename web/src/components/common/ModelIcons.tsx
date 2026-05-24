@@ -14,7 +14,6 @@ const MODEL_COLORS: Record<string, string> = {
   grok: '#000000',
   openai: '#10A37F',
   minimax: '#E45735',
-  claw402: '#7C3AED',
 }
 
 // 获取AI模型图标的函数
@@ -48,9 +47,6 @@ export const getModelIcon = (modelType: string, props: IconProps = {}) => {
       break
     case 'minimax':
       iconPath = '/icons/minimax.svg'
-      break
-    case 'claw402':
-      iconPath = '/icons/claw402.png'
       break
     default:
       return null

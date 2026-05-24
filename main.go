@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log/slog"
 	nofxiagent "nofx/agent"
 	"nofx/api"
@@ -9,7 +10,6 @@ import (
 	"nofx/crypto"
 	"nofx/logger"
 	"nofx/manager"
-	_ "nofx/mcp/payment"
 	_ "nofx/mcp/provider"
 	"nofx/store"
 	"nofx/telegram"
@@ -143,6 +143,7 @@ func main() {
 	server.RegisterAgentHandler(agentWeb)
 	nofxiAgent.Start()
 	defer nofxiAgent.Stop()
+	server.OnchainService().StartConfiguredJobs(context.Background())
 
 	go func() {
 		if err := server.Start(); err != nil {

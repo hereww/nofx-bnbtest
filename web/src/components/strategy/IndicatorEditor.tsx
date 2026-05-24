@@ -1,10 +1,7 @@
-import { Clock, Activity, TrendingUp, BarChart2, Info, Lock, ExternalLink, Zap, Check, AlertCircle, Key } from 'lucide-react'
+import { Clock, Activity, TrendingUp, BarChart2, Info, Lock, Zap, Check, AlertCircle, Key } from 'lucide-react'
 import type { IndicatorConfig } from '../../types'
 import { indicator, ts } from '../../i18n/strategy-translations'
 import { NofxSelect } from '../ui/select'
-
-// Default NofxOS API Key
-const DEFAULT_NOFXOS_API_KEY = 'cm_568c67eae410d912c54c'
 
 interface IndicatorEditorProps {
   config: IndicatorConfig
@@ -116,7 +113,7 @@ export function IndicatorEditor({
 
   // Check if any NofxOS feature is enabled
   const hasNofxosEnabled = config.enable_quant_data || config.enable_oi_ranking || config.enable_netflow_ranking || config.enable_price_ranking
-  const hasApiKey = !!config.nofxos_api_key
+  const hasApiKey = true
 
   return (
     <div className="space-y-5">
@@ -169,19 +166,6 @@ export function IndicatorEditor({
                   {ts(indicator.notConfigured, language)}
                 </span>
               )}
-              <a
-                href="https://nofxos.ai/api-docs"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-1 text-[10px] px-2 py-1 rounded-full transition-all hover:scale-[1.02]"
-                style={{
-                  background: 'rgba(139, 92, 246, 0.2)',
-                  color: '#a855f7',
-                }}
-              >
-                <ExternalLink className="w-3 h-3" />
-                {ts(indicator.viewApiDocs, language)}
-              </a>
             </div>
           </div>
 
@@ -203,20 +187,12 @@ export function IndicatorEditor({
                 }}
               />
             </div>
-            {!disabled && !config.nofxos_api_key && (
-              <button
-                type="button"
-                onClick={() => onChange({ ...config, nofxos_api_key: DEFAULT_NOFXOS_API_KEY })}
-                className="px-3 py-2 rounded-lg text-xs font-medium transition-all hover:scale-[1.02]"
-                style={{
-                  background: 'linear-gradient(135deg, #6366f1, #a855f7)',
-                  color: '#fff',
-                }}
-              >
-                {ts(indicator.fillDefault, language)}
-              </button>
-            )}
           </div>
+          {!hasApiKey && (
+            <p className="mt-2 text-[11px] leading-5" style={{ color: '#F0B90B' }}>
+              {ts(indicator.dataGatewayRoutingHint, language)}
+            </p>
+          )}
 
           {/* NofxOS Data Sources Grid */}
           <div className="mt-4">

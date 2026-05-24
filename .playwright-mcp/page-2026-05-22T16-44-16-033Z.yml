@@ -1,0 +1,114 @@
+- generic [ref=e2]:
+  - region "Notifications alt+T"
+  - generic [ref=e3]:
+    - navigation [ref=e4]:
+      - generic [ref=e5]:
+        - generic [ref=e6] [cursor=pointer]:
+          - img "NOFX Logo" [ref=e7]
+          - generic [ref=e8]: NOFX
+        - generic [ref=e9]:
+          - generic [ref=e10]:
+            - button "AgentBeta" [ref=e11] [cursor=pointer]
+            - button "数据" [ref=e12] [cursor=pointer]
+            - button "链上分析" [ref=e13] [cursor=pointer]: 链上分析
+            - button "策略市场" [ref=e15] [cursor=pointer]
+            - button "配置" [ref=e16] [cursor=pointer]
+            - button "看板" [ref=e17] [cursor=pointer]
+            - button "策略" [ref=e18] [cursor=pointer]
+            - button "排行榜" [ref=e19] [cursor=pointer]
+            - button "常见问题" [ref=e20] [cursor=pointer]
+          - generic [ref=e21]:
+            - generic [ref=e22]:
+              - link "GitHub" [ref=e23] [cursor=pointer]:
+                - /url: https://github.com/tinkle-community/nofx
+                - img [ref=e24]
+              - link "Twitter" [ref=e26] [cursor=pointer]:
+                - /url: https://x.com/nofx_official
+                - img [ref=e27]
+              - link "Telegram" [ref=e29] [cursor=pointer]:
+                - /url: https://t.me/nofx_dev_community
+                - img [ref=e30]
+            - button "登录" [ref=e34] [cursor=pointer]
+            - button "🇨🇳" [ref=e36] [cursor=pointer]:
+              - generic [ref=e37]: 🇨🇳
+              - img [ref=e38]
+    - main [ref=e40]:
+      - generic [ref=e42]:
+        - generic [ref=e44]:
+          - generic [ref=e45]:
+            - generic [ref=e46]:
+              - img [ref=e47]
+              - text: 链上分析模块
+            - heading "链上分析" [level=1] [ref=e50]
+            - paragraph [ref=e51]: 左侧管理合约和监控间隔，右侧查看选中币种的分析结果。每个 BSC 合约都可以独立设置 recent/full 深度和自动监控时间。
+          - button "刷新全部" [ref=e52] [cursor=pointer]:
+            - img [ref=e53]
+            - text: 刷新全部
+        - generic [ref=e58]:
+          - generic [ref=e59]:
+            - generic [ref=e61]:
+              - textbox "0x..." [ref=e62]
+              - generic [ref=e63]:
+                - combobox [ref=e64]:
+                  - option "recent" [selected]
+                  - option "full"
+                - button "添加" [ref=e65] [cursor=pointer]:
+                  - img [ref=e66]
+                  - text: 添加
+            - button "Demo token 0x812fc5119b772c6c7a66249a559f3614623f4444 recent - 数据不足 - 监控 15m 下次 soon" [ref=e68] [cursor=pointer]:
+              - generic [ref=e69]:
+                - generic [ref=e70]:
+                  - generic [ref=e72]: Demo token
+                  - generic [ref=e73]: "0x812fc5119b772c6c7a66249a559f3614623f4444"
+                - generic [ref=e74]: recent
+              - generic [ref=e75]:
+                - generic [ref=e76]: "-"
+                - generic [ref=e77]: 数据不足
+                - generic [ref=e78]: "-"
+              - generic [ref=e79]:
+                - generic [ref=e80]: 监控 15m
+                - generic [ref=e81]: 下次 soon
+          - generic [ref=e82]:
+            - generic [ref=e83]:
+              - generic [ref=e84]:
+                - generic [ref=e85]:
+                  - generic [ref=e86]:
+                    - heading "Demo token" [level=2] [ref=e87]
+                    - generic [ref=e88]: not_analyzed
+                  - generic [ref=e89]: "0x812fc5119b772c6c7a66249a559f3614623f4444"
+                - generic [ref=e90]:
+                  - combobox [ref=e91]:
+                    - option "recent" [selected]
+                    - option "full"
+                  - button "分析" [ref=e92] [cursor=pointer]:
+                    - img [ref=e93]
+                    - text: 分析
+                  - button "关系网" [ref=e96] [cursor=pointer]:
+                    - img [ref=e97]
+                    - text: 关系网
+                  - button "AI 报告" [ref=e102] [cursor=pointer]:
+                    - img [ref=e103]
+                    - text: AI 报告
+                  - button "删除合约" [ref=e111] [cursor=pointer]:
+                    - img [ref=e112]
+              - generic [ref=e115]:
+                - generic [ref=e116]:
+                  - generic [ref=e117]:
+                    - img [ref=e118]
+                    - text: 自动监控
+                  - checkbox "自动监控" [checked] [ref=e121]
+                - generic [ref=e122]:
+                  - generic [ref=e123]: 间隔（分钟）
+                  - spinbutton "间隔（分钟）" [ref=e124]: "15"
+                - generic [ref=e125]:
+                  - generic [ref=e126]: 上次检查
+                  - generic [ref=e127]: "-"
+                - generic [ref=e128]:
+                  - generic [ref=e129]: 下次监控
+                  - generic [ref=e130]: soon
+            - generic [ref=e131]:
+              - heading "分析结果会显示在这里" [level=2] [ref=e132]
+              - paragraph [ref=e133]: 点击上方“分析”，或开启自动监控后等待下一次检查。结果包括安全画像、交易行为、钱包分布和首次买入时间分布。
+              - button "立即分析" [ref=e134] [cursor=pointer]:
+                - img [ref=e135]
+                - text: 立即分析

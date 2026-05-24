@@ -5,7 +5,6 @@ import (
 	"nofx/config"
 	"nofx/logger"
 	"nofx/mcp"
-	_ "nofx/mcp/payment"
 	_ "nofx/mcp/provider"
 	"nofx/store"
 	"nofx/telegram/agent"
@@ -315,9 +314,9 @@ func newLLMClient(st *store.Store, userID string) mcp.AIClient {
 	return nil
 }
 
-// isUSDCProvider returns true for providers that pay per call with USDC (x402 protocol).
+// isUSDCProvider returns true for providers that pay per call with USDC.
 func isUSDCProvider(provider string) bool {
-	return provider == "claw402"
+	return provider == "blockrun-base"
 }
 
 func clientForProvider(provider string) mcp.AIClient {

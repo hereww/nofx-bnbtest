@@ -19,6 +19,8 @@ type NetFlowPosition struct {
 // NetFlowResponse is the API response structure
 type NetFlowResponse struct {
 	Success bool `json:"success"`
+	Error   string `json:"error,omitempty"`
+	Message string `json:"message,omitempty"`
 	Data    struct {
 		Netflows  []NetFlowPosition `json:"netflows"`
 		Count     int               `json:"count"`
@@ -110,7 +112,7 @@ func (c *Client) fetchNetFlowRanking(rankType, duration string, limit int, flowT
 	}
 
 	if !response.Success {
-		return nil, "", fmt.Errorf("API returned failure status")
+		return nil, "", fmt.Errorf("API returned failure status: %s", failureMessage(body))
 	}
 
 	return response.Data.Netflows, response.Data.TimeRange, nil

@@ -94,7 +94,7 @@ export function LoginPage() {
                 <div className="absolute -inset-3 bg-nofx-gold/15 rounded-full blur-2xl" />
                 <img
                   src="/icons/nofx.svg"
-                  alt="NOFX"
+                  alt="NOFXi"
                   className="w-14 h-14 relative z-10"
                 />
               </div>

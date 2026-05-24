@@ -6,9 +6,11 @@ import (
 	"net"
 	"net/http"
 	"nofx/auth"
+	"nofx/config"
 	"nofx/crypto"
 	"nofx/logger"
 	"nofx/manager"
+	"nofx/onchain"
 	"nofx/store"
 	"strings"
 	"time"
@@ -23,6 +25,7 @@ type Server struct {
 	store                     *store.Store
 	cryptoHandler             *CryptoHandler
 	exchangeAccountStateCache *ExchangeAccountStateCache
+	onchainService            *onchain.Service
 	httpServer                *http.Server
 	port                      int
 	telegramReloadCh          chan<- struct{} // signal Telegram bot to reload
@@ -47,6 +50,7 @@ func NewServer(traderManager *manager.TraderManager, st *store.Store, cryptoServ
 		store:                     st,
 		cryptoHandler:             cryptoHandler,
 		exchangeAccountStateCache: NewExchangeAccountStateCache(),
+		onchainService:            onchain.NewService(st),
 		port:                      port,
 	}
 
@@ -89,10 +93,6 @@ func (s *Server) setupRoutes() {
 		// System config (no authentication required, for frontend to determine admin mode/registration status)
 		s.route(api, "GET", "/config", "Get system configuration", s.handleGetSystemConfig)
 
-		// Wallet validation (no authentication required — used by frontend config form)
-		api.POST("/wallet/validate", s.handleWalletValidate)
-		api.POST("/wallet/generate", s.handleWalletGenerate)
-
 		// Crypto related endpoints (no authentication required, not exposed to bot)
 		api.GET("/crypto/config", s.cryptoHandler.HandleGetCryptoConfig)
 		api.GET("/crypto/public-key", s.cryptoHandler.HandleGetPublicKey)
@@ -109,6 +109,13 @@ func (s *Server) setupRoutes() {
 		// Market data (no authentication required)
 		s.route(api, "GET", "/klines", "Candlestick data (?symbol=&interval=&limit=)", s.handleKlines)
 		s.route(api, "GET", "/symbols", "Available trading symbols", s.handleSymbols)
+		s.route(api, "GET", "/custom-tokens", "DEX market snapshots for monitored custom token contract addresses", s.handleCustomTokens)
+		s.route(api, "GET", "/onchain/token-analysis", "On-chain token holder, trade, and risk analysis by contract address", s.handleOnchainTokenAnalysis)
+		s.route(api, "GET", "/onchain/wallet-graph", "On-chain wallet relationship graph for one token", s.handleOnchainWalletGraph)
+		s.route(api, "GET", "/onchain/index-status", "On-chain token index status by contract address", s.handleOnchainIndexStatus)
+		s.route(api, "POST", "/onchain/ai-report/preview", "Preview the AI prompt for an on-chain analysis report", s.handleOnchainAIReportPreview)
+		s.route(api, "POST", "/onchain/ai-report", "Generate an AI on-chain analysis report for one token", s.handleOnchainAIReport)
+		s.route(api, "GET", "/data-gateway/*path", "Proxy self-hosted market data gateway", s.handleDataGatewayProxy)
 
 		// Public strategy market (no authentication required)
 		s.route(api, "GET", "/strategies/public", "Public strategy market", s.handlePublicStrategies)
@@ -125,11 +132,10 @@ func (s *Server) setupRoutes() {
 		{
 			// Logout (add to blacklist)
 			s.route(protected, "POST", "/logout", "Logout (blacklist token)", s.handleLogout)
-			s.route(protected, "POST", "/onboarding/beginner", "Prepare beginner claw402 wallet and default model", s.handleBeginnerOnboarding)
-			s.route(protected, "GET", "/onboarding/beginner/current", "Get current beginner claw402 wallet", s.handleCurrentBeginnerWallet)
 			s.route(protected, "GET", "/agent/preferences", "Get persistent agent preferences", s.handleGetAgentPreferences)
 			s.route(protected, "POST", "/agent/preferences", "Create persistent agent preference", s.handleCreateAgentPreference)
 			s.route(protected, "DELETE", "/agent/preferences/:id", "Delete persistent agent preference", s.handleDeleteAgentPreference)
+			s.route(protected, "POST", "/onchain/index-token", "Start full-history on-chain token indexing", s.handleOnchainIndexToken)
 
 			// User account management
 			s.routeWithSchema(protected, "PUT", "/user/password", "Change current user password",
@@ -281,7 +287,7 @@ StrategyConfig fields:
   indicators.rsi_periods: [7,14] default
   indicators.atr_periods: [14] default
   indicators.boll_periods: [20] default
-  indicators.nofxos_api_key: ALWAYS "cm_568c67eae410d912c54c"
+  indicators.nofxos_api_key: legacy optional key; normally leave empty because data is read from DATA_GATEWAY_URL.
   indicators.enable_quant_data: ALWAYS true
   indicators.enable_quant_oi: ALWAYS true
   indicators.enable_quant_netflow: ALWAYS true
@@ -380,6 +386,7 @@ func (s *Server) handleGetSystemConfig(c *gin.Context) {
 		"initialized":      userCount > 0,
 		"btc_eth_leverage": 10,
 		"altcoin_leverage": 5,
+		"data_gateway_url": config.Get().DataGatewayURL,
 	})
 }
 
@@ -629,6 +636,10 @@ func (s *Server) Shutdown() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	return s.httpServer.Shutdown(ctx)
+}
+
+func (s *Server) OnchainService() *onchain.Service {
+	return s.onchainService
 }
 
 // SetTelegramReloadCh sets the channel used to signal the Telegram bot to reload

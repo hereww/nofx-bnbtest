@@ -30,6 +30,8 @@ type PriceRankingDuration struct {
 // PriceRankingResponse is the API response structure
 type PriceRankingResponse struct {
 	Success bool `json:"success"`
+	Error   string `json:"error,omitempty"`
+	Message string `json:"message,omitempty"`
 	Data    struct {
 		Durations []string                        `json:"durations"`
 		Limit     int                             `json:"limit"`
@@ -65,7 +67,7 @@ func (c *Client) GetPriceRanking(durations string, limit int) (*PriceRankingData
 	}
 
 	if !response.Success {
-		return nil, fmt.Errorf("API returned failure status")
+		return nil, fmt.Errorf("API returned failure status: %s", failureMessage(body))
 	}
 
 	result := &PriceRankingData{

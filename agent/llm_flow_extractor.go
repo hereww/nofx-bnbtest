@@ -457,8 +457,6 @@ func providerExplicitlyMentionedInText(provider, text string) bool {
 		candidates = append(candidates, "blockrun", "blockrun base", "base wallet")
 	case "blockrun-sol":
 		candidates = append(candidates, "blockrun", "blockrun sol", "solana wallet")
-	case "claw402":
-		candidates = append(candidates, "claw 402")
 	}
 	for _, candidate := range candidates {
 		candidate = strings.TrimSpace(candidate)

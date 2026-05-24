@@ -24,10 +24,10 @@ export default function FooterSection({ language }: FooterSectionProps) {
     resources: [
       {
         name: language === 'zh' ? '文档' : 'Documentation',
-        href: 'https://github.com/NoFxAiOS/nofx/blob/main/README.md',
+        href: `${OFFICIAL_LINKS.github}/blob/main/README.md`,
       },
-      { name: 'Issues', href: 'https://github.com/NoFxAiOS/nofx/issues' },
-      { name: 'Pull Requests', href: 'https://github.com/NoFxAiOS/nofx/pulls' },
+      { name: 'Issues', href: `${OFFICIAL_LINKS.github}/issues` },
+      { name: 'Pull Requests', href: `${OFFICIAL_LINKS.github}/pulls` },
     ],
     supporters: [
       { name: 'Binance', href: 'https://www.binance.com/join?ref=NOFXENG' },
@@ -50,9 +50,9 @@ export default function FooterSection({ language }: FooterSectionProps) {
           {/* Brand */}
           <div className="md:col-span-1">
             <div className="flex items-center gap-3 mb-4">
-              <img src="/icons/nofx.svg" alt="NOFX Logo" className="w-8 h-8" />
+              <img src="/icons/nofx.svg" alt="NOFXi Logo" className="w-8 h-8" />
               <span className="text-xl font-bold" style={{ color: '#EAECEF' }}>
-                NOFX
+                NOFXi
               </span>
             </div>
             <p className="text-sm mb-6" style={{ color: '#5E6673' }}>

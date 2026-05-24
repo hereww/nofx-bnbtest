@@ -1,0 +1,85 @@
+- generic [ref=e2]:
+  - region "Notifications alt+T"
+  - generic [ref=e3]:
+    - navigation [ref=e4]:
+      - generic [ref=e5]:
+        - generic [ref=e6] [cursor=pointer]:
+          - img "NOFX Logo" [ref=e7]
+          - generic [ref=e8]: NOFX
+        - generic [ref=e9]:
+          - generic [ref=e10]:
+            - button "AgentBeta" [ref=e11] [cursor=pointer]
+            - button "数据" [ref=e12] [cursor=pointer]
+            - button "链上分析" [ref=e13] [cursor=pointer]: 链上分析
+            - button "策略市场" [ref=e15] [cursor=pointer]
+            - button "配置" [ref=e16] [cursor=pointer]
+            - button "看板" [ref=e17] [cursor=pointer]
+            - button "策略" [ref=e18] [cursor=pointer]
+            - button "排行榜" [ref=e19] [cursor=pointer]
+            - button "常见问题" [ref=e20] [cursor=pointer]
+          - generic [ref=e21]:
+            - generic [ref=e22]:
+              - link "GitHub" [ref=e23] [cursor=pointer]:
+                - /url: https://github.com/tinkle-community/nofx
+                - img [ref=e24]
+              - link "Twitter" [ref=e26] [cursor=pointer]:
+                - /url: https://x.com/nofx_official
+                - img [ref=e27]
+              - link "Telegram" [ref=e29] [cursor=pointer]:
+                - /url: https://t.me/nofx_dev_community
+                - img [ref=e30]
+            - button "登录" [ref=e34] [cursor=pointer]
+            - button "🇨🇳" [ref=e36] [cursor=pointer]:
+              - generic [ref=e37]: 🇨🇳
+              - img [ref=e38]
+    - main [ref=e40]:
+      - generic [ref=e42]:
+        - generic [ref=e44]:
+          - generic [ref=e45]:
+            - generic [ref=e46]:
+              - img [ref=e47]
+              - text: 链上分析模块
+            - heading "链上分析" [level=1] [ref=e50]
+            - paragraph [ref=e51]: 这里是独立的多币种分析管理器。你可以添加多个 BSC 合约，分别控制 recent/full 分析深度，刷新安全画像、持有人行为和钱包分布。
+          - button "刷新全部" [ref=e52] [cursor=pointer]:
+            - img [ref=e53]
+            - text: 刷新全部
+        - generic [ref=e58]:
+          - generic [ref=e59]:
+            - generic [ref=e61]:
+              - textbox "0x..." [ref=e62]
+              - generic [ref=e63]:
+                - combobox [ref=e64]:
+                  - option "recent" [selected]
+                  - option "full"
+                - button "添加" [ref=e65] [cursor=pointer]:
+                  - img [ref=e66]
+                  - text: 添加
+            - button "Demo token 0x812fc5119b772c6c7a66249a559f3614623f4444 recent - - -" [ref=e68] [cursor=pointer]:
+              - generic [ref=e69]:
+                - generic [ref=e70]:
+                  - generic [ref=e72]: Demo token
+                  - generic [ref=e73]: "0x812fc5119b772c6c7a66249a559f3614623f4444"
+                - generic [ref=e74]: recent
+              - generic [ref=e75]:
+                - generic [ref=e76]: "-"
+                - generic [ref=e77]: "-"
+                - generic [ref=e78]: "-"
+          - generic [ref=e79]:
+            - generic [ref=e81]:
+              - generic [ref=e82]:
+                - generic [ref=e83]:
+                  - heading "Demo token" [level=2] [ref=e84]
+                  - generic [ref=e85]: not_analyzed
+                - generic [ref=e86]: "0x812fc5119b772c6c7a66249a559f3614623f4444"
+              - generic [ref=e87]:
+                - combobox [ref=e88]:
+                  - option "recent" [selected]
+                  - option "full"
+                - button "分析" [ref=e89] [cursor=pointer]:
+                  - img [ref=e90]
+                  - text: 分析
+                - button "启动索引" [ref=e93] [cursor=pointer]
+                - button "删除合约" [ref=e94] [cursor=pointer]:
+                  - img [ref=e95]
+            - generic [ref=e98]: 选择一个合约并点击分析后，这里会显示安全画像、交易行为和钱包分布。

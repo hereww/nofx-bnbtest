@@ -5,8 +5,8 @@
 # Versions extracted as ARGs for consistency
 # ═══════════════════════════════════════════════════════════════
 
-ARG NODE_VERSION=docker.1ms.run/library/node:20-alpine
-ARG NGINX_VERSION=docker.1ms.run/library/nginx:alpine
+ARG NODE_VERSION=m.daocloud.io/docker.io/library/node:20-alpine
+ARG NGINX_VERSION=m.daocloud.io/docker.io/library/nginx:alpine
 
 # ──────────────────────────────────────────────────────────────
 # Build Stage (Node)

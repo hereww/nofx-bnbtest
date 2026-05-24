@@ -72,20 +72,21 @@ func loadSkillRegistry() (map[string]SkillDefinition, error) {
 
 	registry := make(map[string]SkillDefinition, len(entries))
 	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
+		name := entry.Name()
+		if entry.IsDir() || strings.HasPrefix(name, ".") || !strings.HasSuffix(name, ".json") {
 			continue
 		}
-		raw, err := embeddedSkillDefinitions.ReadFile("skills/" + entry.Name())
+		raw, err := embeddedSkillDefinitions.ReadFile("skills/" + name)
 		if err != nil {
 			return nil, err
 		}
 		var def SkillDefinition
 		if err := json.Unmarshal(raw, &def); err != nil {
-			return nil, fmt.Errorf("parse skill definition %s: %w", entry.Name(), err)
+			return nil, fmt.Errorf("parse skill definition %s: %w", name, err)
 		}
 		def = normalizeSkillDefinition(def)
 		if def.Name == "" {
-			return nil, fmt.Errorf("skill definition %s has empty name", entry.Name())
+			return nil, fmt.Errorf("skill definition %s has empty name", name)
 		}
 		registry[def.Name] = def
 	}

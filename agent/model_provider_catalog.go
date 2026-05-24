@@ -29,18 +29,6 @@ func supportedModelProviders() []modelProviderSpec {
 		{ID: "kimi", DisplayName: "Kimi (Moonshot)", DefaultModel: "moonshot-v1-auto", CredentialLabelZH: "API Key", CredentialLabelEN: "API key", SupportsCustomAPIURL: true, SupportsCustomModel: true},
 		{ID: "minimax", DisplayName: "MiniMax", DefaultModel: "MiniMax-M2.5", CredentialLabelZH: "API Key", CredentialLabelEN: "API key", SupportsCustomAPIURL: true, SupportsCustomModel: true},
 		{
-			ID:                    "claw402",
-			DisplayName:           "Claw402 (Base USDC)",
-			DefaultModel:          "deepseek",
-			CredentialLabelZH:     "钱包私钥",
-			CredentialLabelEN:     "wallet private key",
-			SupportsCustomAPIURL:  false,
-			SupportsCustomModel:   true,
-			UsesWalletCredential:  true,
-			Recommended:           true,
-			RecommendedModelHints: []string{"deepseek", "glm-5", "gpt-5.4", "claude-opus", "qwen-max", "grok-4.1"},
-		},
-		{
 			ID:                    "blockrun-base",
 			DisplayName:           "BlockRun (Base Wallet)",
 			DefaultModel:          "auto",
@@ -151,9 +139,9 @@ func modelProviderSummaryList(lang string) string {
 
 func modelProviderChoicePrompt(lang string) string {
 	if lang == "zh" {
-		return "可选模型 provider：" + modelProviderSummaryList(lang) + "。这些 provider 是并列可选的：你可以直接选 `claw402`、DeepSeek / OpenAI / Claude / Gemini / Qwen / Kimi / Grok / MiniMax 这类 API Key provider，或者选 `blockrun-base` / `blockrun-sol` 这类钱包 provider。我们优先推荐 `claw402`，因为它按次付费、用 Base USDC 钱包支付、默认配置更省事。对于第一次使用的新手，也可以直接去产品配置页的模型配置里选择 `claw402`：那里支持直接创建 Base 钱包，并且可以直接扫码充值/支付。请先告诉我你想用哪个 provider。"
+		return "可选模型 provider：" + modelProviderSummaryList(lang) + "。这些 provider 是并列可选的：你可以选择 DeepSeek / OpenAI / Claude / Gemini / Qwen / Kimi / Grok / MiniMax 这类 API Key provider，或者选 `blockrun-base` / `blockrun-sol` 这类钱包 provider。请先告诉我你想用哪个 provider。"
 	}
-	return "Available model providers: " + modelProviderSummaryList(lang) + ". These providers are peer options: you can choose `claw402`, an API-key provider such as DeepSeek / OpenAI / Claude / Gemini / Qwen / Kimi / Grok / MiniMax, or a wallet-based provider such as `blockrun-base` / `blockrun-sol`. We recommend `claw402` first because it is pay-per-use, uses Base USDC wallet payment, and has the simplest default setup. If this is your first time, you can also open the product's model config page, choose `claw402`, create a Base wallet there directly, and pay by scanning the QR/deposit flow. Tell me which provider you want first."
+	return "Available model providers: " + modelProviderSummaryList(lang) + ". These providers are peer options: choose an API-key provider such as DeepSeek / OpenAI / Claude / Gemini / Qwen / Kimi / Grok / MiniMax, or a wallet-based provider such as `blockrun-base` / `blockrun-sol`. Tell me which provider you want first."
 }
 
 func modelProviderDetailedGuidance(lang, provider string) string {
@@ -180,10 +168,6 @@ func modelProviderDetailedGuidance(lang, provider string) string {
 		if len(spec.RecommendedModelHints) > 0 {
 			lines = append(lines, "- 常见可选模型："+strings.Join(spec.RecommendedModelHints, "、"))
 		}
-		if provider == "claw402" {
-			lines = append(lines, "- 这是我们优先推荐的 provider：按次付费、Base USDC 钱包支付，对新手最省事。")
-			lines = append(lines, "- 如果你是第一次用，也可以直接去配置页的模型配置里选择 `claw402`，那里支持直接创建 Base 钱包，并可直接扫码充值/支付。")
-		}
 		return strings.Join(lines, "\n")
 	}
 	lines := []string{
@@ -204,10 +188,6 @@ func modelProviderDetailedGuidance(lang, provider string) string {
 	if len(spec.RecommendedModelHints) > 0 {
 		lines = append(lines, "- Common model choices: "+strings.Join(spec.RecommendedModelHints, ", "))
 	}
-	if provider == "claw402" {
-		lines = append(lines, "- This is our recommended provider: pay-per-use, Base USDC wallet payment, and the easiest setup for first-time users.")
-		lines = append(lines, "- If this is your first time, you can also open the model config page, choose `claw402`, create a Base wallet there directly, and pay through the QR/deposit flow.")
-	}
 	return strings.Join(lines, "\n")
 }
 
@@ -219,8 +199,6 @@ func modelProviderCredentialGuidance(lang, provider string) string {
 	provider = strings.TrimSpace(spec.ID)
 	if lang == "zh" {
 		switch provider {
-		case "claw402":
-			return "claw402 这里要填的是 Base 链 EVM 钱包私钥。\n- 如果你是第一次用，最省事的方式是直接去配置页的模型配置里选择 `claw402`。\n- 那里可以一键快速创建钱包，界面会直接展示新钱包私钥，并且提供 Base USDC 充值入口。\n- 创建后请立刻备份私钥；系统会用它完成 claw402 支付和模型调用。\n- 如果你已经有 MetaMask、Rabby、Coinbase Wallet 这类 Base/EVM 钱包，也可以从钱包里导出现有私钥再发我。"
 		case "blockrun-base":
 			return "blockrun-base 这里要填的是 Base 链 EVM 钱包私钥。你可以从现有 EVM 钱包导出私钥后发我。"
 		case "blockrun-sol":
@@ -230,8 +208,6 @@ func modelProviderCredentialGuidance(lang, provider string) string {
 		}
 	}
 	switch provider {
-	case "claw402":
-		return "For claw402, this field expects a Base-chain EVM wallet private key.\n- If this is your first time, the easiest path is to open the model config page and choose `claw402`.\n- That flow can quickly create a wallet for you, show the new private key, and provide a Base USDC deposit path.\n- Back up the key immediately after creation; the system uses it for claw402 payments and model access.\n- If you already use MetaMask, Rabby, or Coinbase Wallet, you can also export an existing Base/EVM wallet private key and send it to me."
 	case "blockrun-base":
 		return "For blockrun-base, this field expects a Base-chain EVM wallet private key. You can export it from an existing EVM wallet and send it to me."
 	case "blockrun-sol":

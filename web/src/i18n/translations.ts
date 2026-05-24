@@ -992,6 +992,18 @@ export const translations = {
 
     // Data Page
     dataCenter: 'Data Center',
+    dataCenterDescription:
+      'NofxOS provides market signals, quant rankings, fund flow, and strategy input data for trading decisions. External dashboards are opened in a separate tab to avoid browser iframe security blocks.',
+    openNofxosDashboard: 'Open Data Gateway',
+    dataMarketSignals: 'Market Signals',
+    dataMarketSignalsDesc: 'Track price action, volume, open interest, and funding signals used by trading strategies.',
+    dataQuantRankings: 'Quant Rankings',
+    dataQuantRankingsDesc: 'Use AI500, OI ranking, fund flow, and price ranking data to narrow candidate coins.',
+    dataStrategyInputs: 'Strategy Inputs',
+    dataStrategyInputsDesc: 'Feed selected external data into strategy rules and agent prompts from the strategy editor.',
+    dataEmbedBlockedTitle: 'Data gateway status',
+    dataEmbedBlockedDesc:
+      'NOFX now reads market data from the self-hosted data gateway instead of external NofxOS embeds.',
 
     // Strategy Market Page
     strategyMarket: {
@@ -1221,16 +1233,16 @@ export const translations = {
       configureApi: 'Configure API',
       configureWallet: 'Configure Wallet',
       chooseProvider: 'Choose Your AI Provider',
-      claw402EntryDesc: 'Recommended default path. Use Base USDC pay-per-call instead of managing API keys.',
+      gatewayModelEntryDesc: 'Use your own model API key. Configure DeepSeek, OpenAI, Qwen, Claude, Gemini, Grok, Kimi, or MiniMax directly.',
       otherApiEntry: 'Other API Providers',
       otherApiEntryDesc: 'Use your own API key for OpenAI, Claude, Gemini, DeepSeek, and more.',
       payPerCall: 'Pay-per-call USDC · All AI Models · No API Key',
       recommended: 'Best',
       allModelsClaw: 'Pay-per-call with USDC — supports all major AI models',
       selectAiModel: 'Choose AI Model',
-      allModelsUnified: 'All models unified via Claw402. Switch anytime after setup.',
+      allModelsUnified: 'Choose the upstream model name for this provider. You can switch anytime after setup.',
       setupWallet: 'Setup Wallet',
-      walletInfo: 'Claw402 uses USDC on Base chain. You need an EVM wallet.',
+      walletInfo: 'Wallet providers use an external wallet. API-key providers only need their API key.',
       exportKey: 'Export private key from MetaMask, Rabby, etc.',
       dedicatedWallet: 'Recommended: create a dedicated wallet with a small USDC balance',
       walletPrivateKey: 'Wallet Private Key (Base Chain EVM)',
@@ -1249,8 +1261,8 @@ export const translations = {
       validating: 'Validating...',
       walletAddress: 'Wallet Address',
       usdcBalance: 'Base USDC Balance',
-      claw402Connected: 'claw402 Connected',
-      claw402Unreachable: 'claw402 Unreachable',
+      providerConnected: 'Provider connected',
+      providerUnreachable: 'Provider unreachable',
       depositUsdc: 'Deposit USDC to this address on Base chain',
       invalidKeyPrefix: 'Please add 0x at the beginning',
       invalidKeyLength: 'Should be 66 characters, currently',
@@ -2300,6 +2312,18 @@ export const translations = {
 
     // Data Page
     dataCenter: '数据中心',
+    dataCenterDescription:
+      'NofxOS 为交易决策提供市场信号、量化排行、资金流向和策略输入数据。外部数据看板会在新窗口打开，避免浏览器 iframe 安全限制造成误报。',
+    openNofxosDashboard: '打开数据网关',
+    dataMarketSignals: '市场信号',
+    dataMarketSignalsDesc: '查看价格走势、成交量、持仓量和资金费率等策略会用到的信号。',
+    dataQuantRankings: '量化排行',
+    dataQuantRankingsDesc: '通过 AI500、OI 排行、资金流向和涨跌榜缩小候选币范围。',
+    dataStrategyInputs: '策略输入',
+    dataStrategyInputsDesc: '在策略编辑器中把选定的外部数据接入规则和 agent prompt。',
+    dataEmbedBlockedTitle: '数据网关状态',
+    dataEmbedBlockedDesc:
+      'NOFX 现在读取自研数据网关，不再嵌入外部 NofxOS 页面。',
 
     // Strategy Market Page
     strategyMarket: {
@@ -2526,16 +2550,16 @@ export const translations = {
       configureApi: '配置 API',
       configureWallet: '配置钱包',
       chooseProvider: '选择 AI 模型提供商',
-      claw402EntryDesc: '默认推荐走这条路。直接用 Base USDC 按次付费，不需要自己管理 API Key。',
+      gatewayModelEntryDesc: '使用你自己的模型 API Key。可直接配置 DeepSeek、OpenAI、Qwen、Claude、Gemini、Grok、Kimi 或 MiniMax。',
       otherApiEntry: '其他 API 模型',
       otherApiEntryDesc: '如果你已经有自己的 OpenAI、Claude、Gemini、DeepSeek 等 API Key，再从这里进入。',
       payPerCall: 'USDC 按次付费 · 支持全部 AI 模型 · 无需 API Key',
       recommended: '推荐',
       allModelsClaw: '用 USDC 按次付费，支持所有主流 AI 模型',
       selectAiModel: '① 选择 AI 模型',
-      allModelsUnified: '所有模型通过 Claw402 统一调用，创建后可随时切换',
+      allModelsUnified: '选择该 provider 的实际模型名，创建后可随时切换',
       setupWallet: '② 设置钱包',
-      walletInfo: '💡 Claw402 使用 Base 链上的 USDC 付费，你需要一个 EVM 钱包',
+      walletInfo: '钱包 provider 需要外部钱包；API Key provider 只需要对应平台的 API Key',
       exportKey: '可以用 MetaMask、Rabby 等钱包导出私钥',
       dedicatedWallet: '建议新建一个专用钱包，充入少量 USDC 即可',
       walletPrivateKey: '钱包私钥（Base 链 EVM）',
@@ -2554,8 +2578,8 @@ export const translations = {
       validating: '验证中...',
       walletAddress: '钱包地址',
       usdcBalance: 'Base USDC 余额',
-      claw402Connected: 'claw402 已连接',
-      claw402Unreachable: 'claw402 不可达',
+      providerConnected: 'Provider 已连接',
+      providerUnreachable: 'Provider 不可达',
       depositUsdc: '请往此地址充值 Base 链 USDC',
       invalidKeyPrefix: '请在开头加 0x',
       invalidKeyLength: '应为 66 个字符，当前',
@@ -3410,6 +3434,18 @@ export const translations = {
 
     // Data Page
     dataCenter: 'Data Center',
+    dataCenterDescription:
+      'NofxOS menyediakan sinyal pasar, peringkat quant, arus dana, dan data input strategi untuk keputusan trading. Dashboard eksternal dibuka di tab terpisah agar tidak terkena blok keamanan iframe browser.',
+    openNofxosDashboard: 'Buka Data Gateway',
+    dataMarketSignals: 'Sinyal Pasar',
+    dataMarketSignalsDesc: 'Pantau harga, volume, open interest, dan funding signal yang dipakai strategi trading.',
+    dataQuantRankings: 'Peringkat Quant',
+    dataQuantRankingsDesc: 'Gunakan AI500, peringkat OI, arus dana, dan ranking harga untuk menyaring kandidat coin.',
+    dataStrategyInputs: 'Input Strategi',
+    dataStrategyInputsDesc: 'Masukkan data eksternal terpilih ke aturan strategi dan prompt agent dari editor strategi.',
+    dataEmbedBlockedTitle: 'Status data gateway',
+    dataEmbedBlockedDesc:
+      'NOFX sekarang membaca data dari gateway data mandiri, bukan embed NofxOS eksternal.',
 
     // Strategy Market Page
     strategyMarket: {
@@ -3636,16 +3672,16 @@ export const translations = {
       configureApi: 'Konfigurasi API',
       configureWallet: 'Konfigurasi Wallet',
       chooseProvider: 'Pilih Penyedia AI Anda',
-      claw402EntryDesc: 'Jalur default yang direkomendasikan. Gunakan Base USDC bayar per panggilan tanpa mengelola API key.',
+      gatewayModelEntryDesc: 'Gunakan API key model Anda sendiri dan konfigurasikan provider secara langsung.',
       otherApiEntry: 'Penyedia API Lain',
       otherApiEntryDesc: 'Gunakan API key Anda sendiri untuk OpenAI, Claude, Gemini, DeepSeek, dan lainnya.',
       payPerCall: 'Bayar per panggilan USDC · Semua Model AI · Tanpa API Key',
       recommended: 'Terbaik',
       allModelsClaw: 'Bayar per panggilan dengan USDC — mendukung semua model AI utama',
       selectAiModel: 'Pilih Model AI',
-      allModelsUnified: 'Semua model terpadu via Claw402. Ganti kapan saja setelah setup.',
+      allModelsUnified: 'Pilih nama model upstream untuk provider ini. Bisa diganti kapan saja.',
       setupWallet: 'Setup Wallet',
-      walletInfo: 'Claw402 menggunakan USDC di Base chain. Anda memerlukan wallet EVM.',
+      walletInfo: 'Provider wallet memerlukan wallet eksternal. Provider API-key hanya memerlukan API key.',
       exportKey: 'Ekspor private key dari MetaMask, Rabby, dll.',
       dedicatedWallet: 'Disarankan: buat wallet khusus dengan saldo USDC kecil',
       walletPrivateKey: 'Private Key Wallet (Base Chain EVM)',
@@ -3664,8 +3700,8 @@ export const translations = {
       validating: 'Memvalidasi...',
       walletAddress: 'Alamat Wallet',
       usdcBalance: 'Saldo Base USDC',
-      claw402Connected: 'claw402 Terhubung',
-      claw402Unreachable: 'claw402 Tidak Dapat Dijangkau',
+      providerConnected: 'Provider terhubung',
+      providerUnreachable: 'Provider tidak dapat dijangkau',
       depositUsdc: 'Deposit USDC ke alamat ini di Base chain',
       invalidKeyPrefix: 'Tambahkan 0x di awal',
       invalidKeyLength: 'Harus 66 karakter, saat ini',

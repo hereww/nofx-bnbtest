@@ -1,12 +1,17 @@
-// Package nofxos provides data access to the NofxOS API (https://nofxos.ai)
+// Package nofxos provides access to the NofxOS-compatible local data gateway
 // for quantitative trading data including AI500 scores, OI rankings,
 // fund flow (NetFlow), price rankings, and coin details.
 package nofxos
 
 import (
+	"encoding/json"
+	"fmt"
 	"io/ioutil"
+	"net"
 	"net/http"
+	"net/url"
 	"nofx/security"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -14,9 +19,9 @@ import (
 
 // Default configuration
 const (
-	DefaultBaseURL = "https://nofxos.ai"
+	DefaultBaseURL = "http://127.0.0.1:8090"
 	DefaultTimeout = 30 * time.Second
-	DefaultAuthKey = "cm_568c67eae410d912c54c"
+	DefaultAuthKey = ""
 )
 
 // Client is the NofxOS API client
@@ -25,7 +30,6 @@ type Client struct {
 	AuthKey string
 	Timeout time.Duration
 	mu      sync.RWMutex
-	claw402 *Claw402DataClient // If set, routes requests through claw402
 }
 
 var (
@@ -48,23 +52,22 @@ func DefaultClient() *Client {
 // NewClient creates a new NofxOS API client
 func NewClient(baseURL, authKey string) *Client {
 	if baseURL == "" {
-		baseURL = DefaultBaseURL
+		baseURL = os.Getenv("DATA_GATEWAY_URL")
+		if baseURL == "" {
+			baseURL = DefaultBaseURL
+		}
 	}
 	if authKey == "" {
-		authKey = DefaultAuthKey
+		authKey = os.Getenv("DATA_GATEWAY_TOKEN")
+		if authKey == "" {
+			authKey = DefaultAuthKey
+		}
 	}
 	return &Client{
 		BaseURL: baseURL,
 		AuthKey: authKey,
 		Timeout: DefaultTimeout,
 	}
-}
-
-// SetClaw402 enables routing requests through claw402 payment gateway.
-func (c *Client) SetClaw402(claw402Client *Claw402DataClient) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.claw402 = claw402Client
 }
 
 // SetConfig updates client configuration
@@ -93,31 +96,28 @@ func (c *Client) GetAuthKey() string {
 	return c.AuthKey
 }
 
-// doRequest performs an HTTP GET request with authentication.
-// If claw402 client is configured, routes through claw402 payment gateway instead.
+// doRequest performs an HTTP GET request with optional authentication.
 func (c *Client) doRequest(endpoint string) ([]byte, error) {
 	c.mu.RLock()
-	claw402Client := c.claw402
 	baseURL := c.BaseURL
 	authKey := c.AuthKey
 	timeout := c.Timeout
 	c.mu.RUnlock()
 
-	// Route through claw402 if configured
-	if claw402Client != nil {
-		return claw402Client.DoRequest(endpoint)
+	target := baseURL + endpoint
+	if err := validateGatewayURL(target); err != nil {
+		return nil, err
 	}
-
-	url := baseURL + endpoint
-	if !strings.Contains(url, "auth=") {
-		if strings.Contains(url, "?") {
-			url += "&auth=" + authKey
-		} else {
-			url += "?auth=" + authKey
-		}
+	req, err := http.NewRequest(http.MethodGet, target, nil)
+	if err != nil {
+		return nil, err
 	}
-
-	resp, err := security.SafeGet(url, timeout)
+	req.Header.Set("Accept", "application/json")
+	if strings.TrimSpace(authKey) != "" {
+		req.Header.Set("X-Gateway-Token", strings.TrimSpace(authKey))
+	}
+	client := &http.Client{Timeout: timeout}
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -138,6 +138,28 @@ func (c *Client) doRequest(endpoint string) ([]byte, error) {
 	return body, nil
 }
 
+// failureMessage extracts the API-provided error message from a NofxOS response.
+func failureMessage(body []byte) string {
+	var payload struct {
+		Error   string `json:"error"`
+		Message string `json:"message"`
+		Code    int    `json:"code"`
+	}
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return strings.TrimSpace(string(body))
+	}
+	if payload.Error != "" {
+		return payload.Error
+	}
+	if payload.Message != "" {
+		return payload.Message
+	}
+	if payload.Code != 0 {
+		return fmt.Sprintf("API returned error code: %d", payload.Code)
+	}
+	return strings.TrimSpace(string(body))
+}
+
 // APIError represents an API error response
 type APIError struct {
 	StatusCode int
@@ -150,12 +172,43 @@ func (e *APIError) Error() string {
 
 // ExtractAuthKey extracts auth key from a URL string
 func ExtractAuthKey(url string) string {
-	if idx := strings.Index(url, "auth="); idx != -1 {
-		authKey := url[idx+5:]
-		if ampIdx := strings.Index(authKey, "&"); ampIdx != -1 {
-			authKey = authKey[:ampIdx]
-		}
-		return authKey
+	parsed, err := urlpkgParse(url)
+	if err == nil {
+		return parsed.Query().Get("auth")
 	}
 	return ""
+}
+
+var urlpkgParse = url.Parse
+
+func validateGatewayURL(rawURL string) error {
+	parsed, err := url.Parse(rawURL)
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return security.ValidateURL(rawURL)
+	}
+	scheme := strings.ToLower(parsed.Scheme)
+	if scheme != "http" && scheme != "https" {
+		return fmt.Errorf("unsupported data gateway scheme: %s", scheme)
+	}
+	path := parsed.EscapedPath()
+	if path != "/health" && !strings.HasPrefix(path, "/api/") {
+		return fmt.Errorf("unsupported data gateway path: %s", parsed.Path)
+	}
+	if isTrustedGatewayHost(parsed.Hostname()) {
+		return nil
+	}
+	return security.ValidateURL(rawURL)
+}
+
+func isTrustedGatewayHost(host string) bool {
+	host = strings.Trim(strings.ToLower(strings.TrimSpace(host)), "[]")
+	if host == "" {
+		return false
+	}
+	switch host {
+	case "localhost", "127.0.0.1", "::1", "nofx-data-gateway":
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
 }

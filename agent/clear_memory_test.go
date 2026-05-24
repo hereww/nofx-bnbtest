@@ -35,11 +35,11 @@ func TestClearRemovesActiveAndPendingConversationState(t *testing.T) {
 	a.savePendingProposalSession(PendingProposalSession{
 		UserID:         userID,
 		SourceUserText: "帮我配置模型",
-		ProposalText:   "推荐 claw402，你要继续吗？",
+		ProposalText:   "推荐 deepseek，你要继续吗？",
 	})
 	a.saveSetupState(userID, &SetupState{
 		Step:       "await_ai_model",
-		AIProvider: "claw402",
+		AIProvider: "deepseek",
 	})
 	if err := st.SetSystemConfig(skillSessionConfigKey(userID), `{"name":"model_management","action":"create"}`); err != nil {
 		t.Fatalf("seed skill session: %v", err)
@@ -57,7 +57,7 @@ func TestClearRemovesActiveAndPendingConversationState(t *testing.T) {
 		t.Fatalf("seed execution state: %v", err)
 	}
 	a.saveReferenceMemory(userID, &CurrentReferences{
-		Model: &EntityReference{ID: "m1", Name: "claw402", Source: "context"},
+		Model: &EntityReference{ID: "m1", Name: "deepseek", Source: "context"},
 	}, nil)
 	a.SnapshotManager(userID).Save(SuspendedTask{ResumeHint: "旧任务"})
 

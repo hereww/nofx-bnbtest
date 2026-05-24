@@ -15,6 +15,7 @@ import (
 
 	"nofx/kernel"
 	"nofx/mcp"
+	"nofx/onchain"
 	"nofx/safe"
 	"nofx/security"
 	"nofx/store"
@@ -70,6 +71,9 @@ func plannerToolDomainForText(text string) string {
 	if hasExplicitManagementDomainCue(text, "trader") || containsAny(lower, []string{"交易员", "trader", "启动", "停止交易员", "扫描间隔", "竞技场"}) {
 		return "trader"
 	}
+	if containsAny(lower, []string{"链上", "合约地址", "持有人", "持仓地址", "购买时间", "买入时间", "关联地址", "关联钱包", "钱包聚类", "筹码", "honeypot", "onchain", "token holder", "holders", "contract address", "wallet cluster"}) {
+		return "onchain"
+	}
 	if containsAny(lower, []string{"余额", "资产", "仓位", "持仓", "订单", "成交", "交易历史", "balance", "position", "positions", "trade history", "account", "钱包", "wallet"}) {
 		return "account"
 	}
@@ -83,6 +87,8 @@ func plannerToolNamesForDomain(domain string) []string {
 	switch domain {
 	case "market":
 		return []string{"get_market_snapshot", "get_market_price", "get_kline", "search_stock"}
+	case "onchain":
+		return []string{"analyze_token_onchain", "get_market_snapshot", "get_market_price"}
 	case "account":
 		return []string{"get_balance", "get_positions", "get_trade_history", "get_exchange_configs"}
 	case "trader":
@@ -103,6 +109,7 @@ func plannerToolNamesForDomain(domain string) []string {
 			"get_model_configs", "manage_model_config",
 			"get_strategies", "manage_strategy",
 			"manage_trader",
+			"analyze_token_onchain",
 			"get_balance", "get_positions", "get_trade_history",
 			"get_market_snapshot", "get_market_price", "get_kline", "search_stock",
 		}
@@ -395,7 +402,7 @@ func modelConfigFieldsSchema() map[string]any {
 		},
 		"provider": map[string]any{
 			"type":        "string",
-			"description": "Provider slug such as openai, claude, gemini, deepseek, qwen, kimi, grok, minimax, claw402, blockrun-base, or blockrun-sol.",
+			"description": "Provider slug such as openai, claude, gemini, deepseek, qwen, kimi, grok, minimax, blockrun-base, or blockrun-sol.",
 		},
 		"name": map[string]any{
 			"type":        "string",
@@ -407,11 +414,11 @@ func modelConfigFieldsSchema() map[string]any {
 		},
 		"api_key": map[string]any{
 			"type":        "string",
-			"description": "Provider credential. For standard providers this is an API key; for claw402/blockrun it is the wallet private key. Sensitive and never returned in full.",
+			"description": "Provider credential. For standard providers this is an API key; for blockrun providers it is the wallet private key. Sensitive and never returned in full.",
 		},
 		"custom_api_url": map[string]any{
 			"type":        "string",
-			"description": "Custom API base URL or endpoint override. Optional for standard providers; not used by claw402/blockrun.",
+			"description": "Custom API base URL or endpoint override. Optional for standard providers; not used by blockrun providers.",
 		},
 		"custom_model_name": map[string]any{
 			"type":        "string",
@@ -776,6 +783,33 @@ func buildAgentTools() []mcp.Tool {
 		{
 			Type: "function",
 			Function: mcp.FunctionDef{
+				Name:        "analyze_token_onchain",
+				Description: "Analyze an EVM token contract on-chain. Use this when the user asks about token holders, first buy time, wallet clusters, transfer history, DEX buyers/sellers, honeypot/security risk, or contract-address-based token analysis. This is analysis only and does not trade.",
+				Parameters: map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"chain": map[string]any{
+							"type":        "string",
+							"description": "Blockchain id. Only bsc is supported in this MVP.",
+							"enum":        []string{"bsc"},
+						},
+						"address": map[string]any{
+							"type":        "string",
+							"description": "Token contract address, for example 0x812fc5119b772c6c7a66249a559f3614623f4444.",
+						},
+						"depth": map[string]any{
+							"type":        "string",
+							"description": "recent uses public APIs; full uses local full-history index and requires ONCHAIN_BSC_ARCHIVE_RPC_URL.",
+							"enum":        []string{"recent", "full"},
+						},
+					},
+					"required": []string{"address"},
+				},
+			},
+		},
+		{
+			Type: "function",
+			Function: mcp.FunctionDef{
 				Name:        "get_kline",
 				Description: "Get recent kline/candlestick data for a crypto symbol. Use this when the user asks for recent candles, K 线, recent price structure, or a short-term chart context.",
 				Parameters: map[string]any{
@@ -904,6 +938,8 @@ func (a *Agent) handleToolCall(ctx context.Context, storeUserID string, userID i
 		return a.toolGetMarketPrice(tc.Function.Arguments)
 	case "get_market_snapshot":
 		return a.toolGetMarketSnapshot(tc.Function.Arguments)
+	case "analyze_token_onchain":
+		return a.toolAnalyzeTokenOnchain(ctx, tc.Function.Arguments)
 	case "get_kline":
 		return a.toolGetKline(tc.Function.Arguments)
 	case "get_trade_history":
@@ -3146,6 +3182,36 @@ func (a *Agent) toolGetMarketSnapshot(argsJSON string) string {
 			"recent_klines":         klines,
 		},
 	})
+	return string(out)
+}
+
+func (a *Agent) toolAnalyzeTokenOnchain(ctx context.Context, argsJSON string) string {
+	var args struct {
+		Chain   string `json:"chain"`
+		Address string `json:"address"`
+		Depth   string `json:"depth"`
+	}
+	if err := json.Unmarshal([]byte(argsJSON), &args); err != nil {
+		return fmt.Sprintf(`{"success":false,"status":"invalid_request","error":"invalid arguments: %s"}`, err)
+	}
+	if args.Chain == "" {
+		args.Chain = "bsc"
+	}
+	if args.Depth == "" {
+		args.Depth = "recent"
+	}
+	if a.store == nil {
+		return `{"success":false,"status":"unavailable","error":"store is not available"}`
+	}
+	resp, err := onchain.NewService(a.store).AnalyzeToken(ctx, onchain.TokenAnalysisRequest{
+		Chain:   args.Chain,
+		Address: args.Address,
+		Depth:   args.Depth,
+	})
+	if err != nil {
+		return fmt.Sprintf(`{"success":false,"status":"error","error":%q}`, err.Error())
+	}
+	out, _ := json.Marshal(resp)
 	return string(out)
 }
 
