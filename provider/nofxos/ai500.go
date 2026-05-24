@@ -24,6 +24,8 @@ type CoinData struct {
 // AI500Response is the API response structure
 type AI500Response struct {
 	Success bool `json:"success"`
+	Error   string `json:"error,omitempty"`
+	Message string `json:"message,omitempty"`
 	Data    struct {
 		Coins []CoinData `json:"coins"`
 		Count int        `json:"count"`
@@ -70,7 +72,7 @@ func (c *Client) fetchAI500() ([]CoinData, error) {
 	}
 
 	if !response.Success {
-		return nil, fmt.Errorf("API returned failure status")
+		return nil, fmt.Errorf("API returned failure status: %s", failureMessage(body))
 	}
 
 	// Empty list is a normal condition, not an error

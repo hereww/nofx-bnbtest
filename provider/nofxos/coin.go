@@ -46,6 +46,8 @@ type OIDeltaData struct {
 // CoinResponse is the API response structure for coin details
 type CoinResponse struct {
 	Success bool       `json:"success"`
+	Error   string     `json:"error,omitempty"`
+	Message string     `json:"message,omitempty"`
 	Code    int        `json:"code"`
 	Data    *QuantData `json:"data"`
 }
@@ -75,9 +77,9 @@ func (c *Client) GetCoinData(symbol string, include string) (*QuantData, error) 
 		return nil, fmt.Errorf("JSON parsing failed: %w", err)
 	}
 
-	// Check for success (support both success field and code field)
-	if !response.Success && response.Code != 0 {
-		return nil, fmt.Errorf("API returned error code: %d", response.Code)
+	// Check for success (support both success field and code field).
+	if !response.Success && (response.Code != 0 || response.Error != "" || response.Message != "") {
+		return nil, fmt.Errorf("API returned failure status: %s", failureMessage(body))
 	}
 
 	return response.Data, nil

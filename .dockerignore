@@ -35,6 +35,12 @@ docs/
 # Runtime data
 decision_logs/
 *.log
+data/
+*.db
+*.sqlite
+*.sqlite3
+.env
+.env.*
 
 # Config files (should be mounted)
 config.json

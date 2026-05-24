@@ -1,0 +1,55 @@
+- generic [ref=e2]:
+  - region "Notifications alt+T"
+  - generic [ref=e3]:
+    - navigation [ref=e4]:
+      - generic [ref=e5]:
+        - generic [ref=e6] [cursor=pointer]:
+          - img "NOFX Logo" [ref=e7]
+          - generic [ref=e8]: NOFX
+        - generic [ref=e9]:
+          - generic [ref=e10]:
+            - button "AgentBeta" [ref=e11] [cursor=pointer]
+            - button "Data" [ref=e12] [cursor=pointer]
+            - button "Market" [ref=e13] [cursor=pointer]
+            - button "Config" [ref=e14] [cursor=pointer]
+            - button "Dashboard" [ref=e15] [cursor=pointer]
+            - button "Strategy" [ref=e16] [cursor=pointer]: Strategy
+            - button "Leaderboard" [ref=e18] [cursor=pointer]
+            - button "FAQ" [ref=e19] [cursor=pointer]
+          - generic [ref=e20]:
+            - generic [ref=e21]:
+              - link "GitHub" [ref=e22] [cursor=pointer]:
+                - /url: https://github.com/tinkle-community/nofx
+                - img [ref=e23]
+              - link "Twitter" [ref=e25] [cursor=pointer]:
+                - /url: https://x.com/nofx_official
+                - img [ref=e26]
+              - link "Telegram" [ref=e28] [cursor=pointer]:
+                - /url: https://t.me/nofx_dev_community
+                - img [ref=e29]
+            - button "H hereww@qq.com" [ref=e34] [cursor=pointer]:
+              - generic [ref=e35]: H
+              - generic [ref=e36]: hereww@qq.com
+              - img [ref=e37]
+            - button "🇺🇸" [ref=e40] [cursor=pointer]:
+              - generic [ref=e41]: 🇺🇸
+              - img [ref=e42]
+    - main [ref=e44]:
+      - img [ref=e50]
+    - contentinfo [ref=e52]:
+      - generic [ref=e53]:
+        - paragraph [ref=e54]: NOFX - AI Trading System
+        - paragraph [ref=e55]: ⚠️ Trading involves risk. Use at your own discretion.
+        - generic [ref=e56]:
+          - link "GitHub" [ref=e57] [cursor=pointer]:
+            - /url: https://github.com/tinkle-community/nofx
+            - img [ref=e58]
+            - text: GitHub
+          - link "Twitter" [ref=e60] [cursor=pointer]:
+            - /url: https://x.com/nofx_official
+            - img [ref=e61]
+            - text: Twitter
+          - link "Telegram" [ref=e63] [cursor=pointer]:
+            - /url: https://t.me/nofx_dev_community
+            - img [ref=e64]
+            - text: Telegram

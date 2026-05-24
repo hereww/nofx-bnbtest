@@ -1,15 +1,14 @@
-<h1 align="center">NOFX</h1>
+<h1 align="center">NOFXi</h1>
 
 <p align="center">
-  <strong>Your personal AI trading assistant.</strong><br/>
-  <strong>Any market. Any model. Pay with USDC, not API keys.</strong>
+  <strong>面向实盘与模拟盘的 AI 量化交易智能助手。</strong><br/>
+  <strong>Skill-first agent orchestration, Binance Futures testnet, live data gateway, and safer trading workflows.</strong>
 </p>
 
 <p align="center">
-  <a href="https://github.com/NoFxAiOS/nofx/stargazers"><img src="https://img.shields.io/github/stars/NoFxAiOS/nofx?style=for-the-badge" alt="Stars"></a>
-  <a href="https://github.com/NoFxAiOS/nofx/releases"><img src="https://img.shields.io/github/v/release/NoFxAiOS/nofx?style=for-the-badge" alt="Release"></a>
-  <a href="https://github.com/NoFxAiOS/nofx/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-AGPL--3.0-blue.svg?style=for-the-badge" alt="License"></a>
-  <a href="https://t.me/nofx_dev_community"><img src="https://img.shields.io/badge/Telegram-Community-blue?style=for-the-badge&logo=telegram" alt="Telegram"></a>
+  <a href="https://github.com/hereww/nofx-bnbtest/stargazers"><img src="https://img.shields.io/github/stars/hereww/nofx-bnbtest?style=for-the-badge" alt="Stars"></a>
+  <a href="https://github.com/hereww/nofx-bnbtest/releases"><img src="https://img.shields.io/github/v/release/hereww/nofx-bnbtest?style=for-the-badge" alt="Release"></a>
+  <a href="https://github.com/hereww/nofx-bnbtest/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-AGPL--3.0-blue.svg?style=for-the-badge" alt="License"></a>
 </p>
 
 <p align="center">
@@ -31,14 +30,18 @@
 
 ---
 
-NOFX is an open-source **autonomous** AI trading assistant. Unlike traditional AI tools that require you to manually configure models, manage API keys, and wire up data sources — NOFX's AI **perceives markets, selects models, and fetches data entirely on its own**. Zero human intervention. You set the strategy, the AI handles everything else.
+NOFXi is a secondary development project based on the open-source **NOFX** autonomous AI trading assistant. The original NOFX project introduced an AI trading workflow where the assistant can perceive markets, select models, fetch data, and execute strategy-driven trading tasks. NOFXi keeps that foundation and extends it for a more practical trading-operations assistant experience.
 
-**Fully autonomous**: The AI decides which model to use, what market data to pull, when to trade — all by itself. No manual model configuration. No juggling API keys for different services. Just fund a USDC wallet and let it run.
+**Our development focus**: make the assistant less like a generic chatbot and more like a professional trading operator. The current NOFXi branch adds a skill-first agent architecture, structured management flows for traders/exchanges/models/strategies, Binance USD-M Futures testnet support, a same-origin market data gateway, on-chain token analysis surfaces, deployment-oriented configuration, and safer diagnostic paths for common trading failures.
+
+**Project source**: this project is derived from [NoFxAiOS/nofx](https://github.com/NoFxAiOS/nofx) and is maintained as an independent secondary-development repository at [hereww/nofx-bnbtest](https://github.com/hereww/nofx-bnbtest). Original copyright, license obligations, and upstream attribution are preserved under AGPL-3.0.
+
+**Fully autonomous foundation**: The AI can decide which model to use, what market data to pull, and when to trade. NOFXi adds a controlled skill layer so high-frequency and high-risk tasks follow stable, repeatable flows instead of relying on free-form planning every time.
 
 What makes it different: **built-in [x402](https://x402.org) micropayments**. No API keys. Fund a USDC wallet and pay per request. Your wallet is your identity.
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/NoFxAiOS/nofx/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/hereww/nofx-bnbtest/main/install.sh | bash
 ```
 
 Open **http://127.0.0.1:3000**. Done.
@@ -185,7 +188,7 @@ Crypto · US Stocks · Forex · Metals
 ### Linux / macOS
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/NoFxAiOS/nofx/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/hereww/nofx-bnbtest/main/install.sh | bash
 ```
 
 ### Railway (Cloud)
@@ -195,7 +198,7 @@ curl -fsSL https://raw.githubusercontent.com/NoFxAiOS/nofx/main/install.sh | bas
 ### Docker
 
 ```bash
-curl -O https://raw.githubusercontent.com/NoFxAiOS/nofx/main/docker-compose.prod.yml
+curl -O https://raw.githubusercontent.com/hereww/nofx-bnbtest/main/docker-compose.prod.yml
 docker compose -f docker-compose.prod.yml up -d
 ```
 
@@ -204,7 +207,7 @@ docker compose -f docker-compose.prod.yml up -d
 Install [Docker Desktop](https://www.docker.com/products/docker-desktop/), then:
 
 ```powershell
-curl -o docker-compose.prod.yml https://raw.githubusercontent.com/NoFxAiOS/nofx/main/docker-compose.prod.yml
+curl -o docker-compose.prod.yml https://raw.githubusercontent.com/hereww/nofx-bnbtest/main/docker-compose.prod.yml
 docker compose -f docker-compose.prod.yml up -d
 ```
 
@@ -215,7 +218,7 @@ docker compose -f docker-compose.prod.yml up -d
 # macOS: brew install ta-lib
 # Ubuntu: sudo apt-get install libta-lib0-dev
 
-git clone https://github.com/NoFxAiOS/nofx.git && cd nofx
+git clone https://github.com/hereww/nofx-bnbtest.git && cd nofx-bnbtest
 go build -o nofx && ./nofx          # backend
 cd web && npm install && npm run dev  # frontend (new terminal)
 ```
@@ -223,7 +226,7 @@ cd web && npm install && npm run dev  # frontend (new terminal)
 ### Update
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/NoFxAiOS/nofx/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/hereww/nofx-bnbtest/main/install.sh | bash
 ```
 
 ---
@@ -249,7 +252,7 @@ Everything through the web UI at **http://127.0.0.1:3000**.
 **HTTP (quick):**
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/NoFxAiOS/nofx/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/hereww/nofx-bnbtest/main/install.sh | bash
 # Access via http://YOUR_IP:3000
 ```
 
@@ -309,7 +312,7 @@ See [Contributing Guide](CONTRIBUTING.md) · [Code of Conduct](CODE_OF_CONDUCT.m
 
 All contributions are tracked. When NOFX generates revenue, contributors receive airdrops.
 
-**[Pinned Issues](https://github.com/NoFxAiOS/nofx/issues) get the highest rewards.**
+**[Pinned Issues](https://github.com/hereww/nofx-bnbtest/issues) get the highest rewards.**
 
 | Contribution      | Weight |
 | :---------------- | :----: |
@@ -331,6 +334,8 @@ All contributions are tracked. When NOFX generates revenue, contributors receive
 | API Docs  | [nofxos.ai/api-docs](https://nofxos.ai/api-docs)      |
 | Telegram  | [nofx_dev_community](https://t.me/nofx_dev_community) |
 | Twitter   | [@nofx_official](https://x.com/nofx_official)         |
+| Repository | [hereww/nofx-bnbtest](https://github.com/hereww/nofx-bnbtest) |
+| Upstream Source | [NoFxAiOS/nofx](https://github.com/NoFxAiOS/nofx) |
 
 > **Risk Warning**: AI auto-trading carries significant risks. Recommended for learning/research or small amounts only.
 
@@ -356,4 +361,4 @@ All contributions are tracked. When NOFX generates revenue, contributors receive
 
 [AGPL-3.0](LICENSE)
 
-[![Star History Chart](https://api.star-history.com/svg?repos=NoFxAiOS/nofx&type=Date)](https://star-history.com/#NoFxAiOS/nofx&Date)
+[![Star History Chart](https://api.star-history.com/svg?repos=hereww/nofx-bnbtest&type=Date)](https://star-history.com/#hereww/nofx-bnbtest&Date)

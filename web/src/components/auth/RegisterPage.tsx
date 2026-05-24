@@ -138,7 +138,7 @@ export function RegisterPage() {
               <div className="absolute -inset-2 bg-nofx-gold/20 rounded-full blur-xl animate-pulse"></div>
               <img
                 src="/icons/nofx.svg"
-                alt="NoFx Logo"
+                alt="NOFXi Logo"
                 className="w-16 h-16 object-contain relative z-10 opacity-90"
               />
             </div>

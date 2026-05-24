@@ -2,13 +2,13 @@ import { Brain, Landmark, Rocket, Sparkles } from 'lucide-react'
 
 interface BeginnerGuideCardsProps {
   language: string
-  claw402Ready: boolean
+  modelReady: boolean
   exchangeReady: boolean
   strategyReady: boolean
   traderReady: boolean
   canCreateTrader: boolean
   walletAddress?: string | null
-  onQuickSetupClaw402: () => void
+  onOpenModel: () => void
   onOpenExchange: () => void
   onOpenStrategy: () => void
   onCreateTrader: () => void
@@ -21,13 +21,13 @@ function truncateAddress(address: string) {
 
 export function BeginnerGuideCards({
   language,
-  claw402Ready,
+  modelReady,
   exchangeReady,
   strategyReady,
   traderReady,
   canCreateTrader,
   walletAddress,
-  onQuickSetupClaw402,
+  onOpenModel,
   onOpenExchange,
   onOpenStrategy,
   onCreateTrader,
@@ -40,8 +40,8 @@ export function BeginnerGuideCards({
       icon: Brain,
       title: isZh ? '1. 极速模型' : '1. Fast AI',
       desc: isZh
-        ? '默认就是 Claw402 + DeepSeek。第一次不用挑模型，先跑起来。'
-        : 'Start with Claw402 + DeepSeek. No model picking needed for the first run.',
+        ? '先配置 DeepSeek、OpenAI、Qwen 等自配 API Key，再启动交易员。'
+        : 'Configure your own DeepSeek, OpenAI, Qwen, or other API key before starting a trader.',
       meta: walletAddress
         ? isZh
           ? `钱包 ${truncateAddress(walletAddress)}`
@@ -49,16 +49,16 @@ export function BeginnerGuideCards({
         : isZh
           ? 'Base 链 USDC 按次付费'
           : 'Pay per call with Base USDC',
-      ready: claw402Ready,
-      actionLabel: claw402Ready
+      ready: modelReady,
+      actionLabel: modelReady
         ? isZh
           ? '已配置'
           : 'Configured'
         : isZh
           ? '一键配置'
           : 'One-click setup',
-      onAction: onQuickSetupClaw402,
-      disabled: claw402Ready,
+      onAction: onOpenModel,
+      disabled: modelReady,
     },
     {
       key: 'exchange',
