@@ -3,6 +3,7 @@ package onchain
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"strings"
@@ -204,6 +205,104 @@ func TestAnalyzeTokenRecentAggregatesMockedSources(t *testing.T) {
 	}
 	if resp.DealerFlow.Direction == "" {
 		t.Fatalf("dealer flow direction should not be empty")
+	}
+}
+
+func TestAnalyzeTokenRecentFallsBackToGeckoPoolsWhenDexScreenerFails(t *testing.T) {
+	config.Init()
+
+	st, err := store.New(":memory:")
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	defer st.Close()
+
+	tokenAddress := "0x812fc5119b772c6c7a66249a559f3614623f4444"
+	poolAddress := "0x4271ea806625f27f056d0724cb6fd5baf5353ead"
+	quoteAddress := "0x6d8d8df799279e761a4f49edc319b3bd50f14444"
+	buyer := "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+
+	svc := NewService(st)
+	svc.httpClient = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		switch req.URL.Host {
+		case "api.dexscreener.com":
+			return nil, errors.New("context deadline exceeded (Client.Timeout exceeded while awaiting headers)")
+		case "api.geckoterminal.com":
+			if strings.Contains(req.URL.Path, "/tokens/") {
+				return jsonResponse(http.StatusOK, map[string]any{
+					"data": []any{
+						map[string]any{
+							"id":   "bsc_" + poolAddress,
+							"type": "pool",
+							"attributes": map[string]any{
+								"address":         poolAddress,
+								"name":            "Fire Phoenix / Future",
+								"pool_created_at": "2026-03-11T03:05:10Z",
+								"token_price_usd": "0.09711340025",
+								"reserve_in_usd":  "81257.4125",
+								"volume_usd":      map[string]any{"h24": "3556.4446396086"},
+							},
+							"relationships": map[string]any{
+								"base_token":  map[string]any{"data": map[string]any{"id": "bsc_" + tokenAddress, "type": "token"}},
+								"quote_token": map[string]any{"data": map[string]any{"id": "bsc_" + quoteAddress, "type": "token"}},
+								"dex":         map[string]any{"data": map[string]any{"id": "pancakeswap_v2", "type": "dex"}},
+							},
+						},
+					},
+					"included": []any{
+						map[string]any{"id": "bsc_" + tokenAddress, "type": "token", "attributes": map[string]any{"address": tokenAddress, "name": "Fire Phoenix", "symbol": "FPHX"}},
+						map[string]any{"id": "bsc_" + quoteAddress, "type": "token", "attributes": map[string]any{"address": quoteAddress, "name": "Future", "symbol": "FUTURE"}},
+					},
+				})
+			}
+			return jsonResponse(http.StatusOK, map[string]any{
+				"data": []any{
+					map[string]any{"attributes": map[string]any{
+						"block_number":       float64(100),
+						"tx_hash":            "0xabc",
+						"tx_from_address":    buyer,
+						"from_token_amount":  "10",
+						"to_token_amount":    "1000",
+						"from_token_address": quoteAddress,
+						"to_token_address":   tokenAddress,
+						"block_timestamp":    "2026-01-01T01:00:00Z",
+						"kind":               "buy",
+						"volume_in_usd":      "10",
+					}},
+				},
+			})
+		case "api.gopluslabs.io":
+			return jsonResponse(http.StatusOK, map[string]any{
+				"code": 1,
+				"result": map[string]any{
+					tokenAddress: map[string]any{"token_name": "Fire Phoenix", "token_symbol": "FPHX", "holder_count": "123"},
+				},
+			})
+		default:
+			t.Fatalf("unexpected upstream host: %s", req.URL.Host)
+		}
+		return nil, nil
+	})}
+
+	resp, err := svc.AnalyzeToken(context.Background(), TokenAnalysisRequest{
+		Chain:   "bsc",
+		Address: tokenAddress,
+		Depth:   "recent",
+	})
+	if err != nil {
+		t.Fatalf("AnalyzeToken returned error: %v", err)
+	}
+	if resp.Status != StatusOK {
+		t.Fatalf("status = %q, want %q; message=%q", resp.Status, StatusOK, resp.Message)
+	}
+	if len(resp.Pools) != 1 || resp.Pools[0].Address != poolAddress {
+		t.Fatalf("unexpected pools: %+v", resp.Pools)
+	}
+	if resp.Token.Symbol != "FPHX" {
+		t.Fatalf("symbol = %q, want FPHX", resp.Token.Symbol)
+	}
+	if resp.Recent == nil || resp.Recent.BuyCount != 1 {
+		t.Fatalf("unexpected recent stats: %+v", resp.Recent)
 	}
 }
 

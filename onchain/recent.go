@@ -17,6 +17,8 @@ type dexScreenerTokenResponse struct {
 	Pairs []dexScreenerPair `json:"pairs"`
 }
 
+const onchainPoolDiscoveryAttemptTimeout = 8 * time.Second
+
 type dexScreenerPair struct {
 	ChainID       string `json:"chainId"`
 	DexID         string `json:"dexId"`
@@ -81,6 +83,47 @@ type geckoTradesResponse struct {
 	Data []geckoTrade `json:"data"`
 }
 
+type geckoPoolsResponse struct {
+	Data     []geckoPool             `json:"data"`
+	Included []geckoIncludedResource `json:"included"`
+}
+
+type geckoPool struct {
+	ID         string `json:"id"`
+	Attributes struct {
+		Address       string `json:"address"`
+		Name          string `json:"name"`
+		PoolCreatedAt string `json:"pool_created_at"`
+		TokenPriceUSD string `json:"token_price_usd"`
+		ReserveInUSD  string `json:"reserve_in_usd"`
+		VolumeUSD     struct {
+			H24 string `json:"h24"`
+		} `json:"volume_usd"`
+	} `json:"attributes"`
+	Relationships struct {
+		BaseToken  geckoRelationship `json:"base_token"`
+		QuoteToken geckoRelationship `json:"quote_token"`
+		Dex        geckoRelationship `json:"dex"`
+	} `json:"relationships"`
+}
+
+type geckoRelationship struct {
+	Data struct {
+		ID   string `json:"id"`
+		Type string `json:"type"`
+	} `json:"data"`
+}
+
+type geckoIncludedResource struct {
+	ID         string `json:"id"`
+	Type       string `json:"type"`
+	Attributes struct {
+		Address string `json:"address"`
+		Name    string `json:"name"`
+		Symbol  string `json:"symbol"`
+	} `json:"attributes"`
+}
+
 type geckoTrade struct {
 	Attributes geckoTradeAttrs `json:"attributes"`
 }
@@ -141,20 +184,54 @@ func (s *Service) buildRecentAnalysis(ctx context.Context, chain, address string
 }
 
 func (s *Service) discoverPools(ctx context.Context, chain, address string) ([]PoolSnapshot, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("https://api.dexscreener.com/token-pairs/v1/%s/%s", chain, address), nil)
+	var errs []error
+	var sawSuccessfulSource bool
+	dexURLs := []string{
+		fmt.Sprintf("https://api.dexscreener.com/token-pairs/v1/%s/%s", chain, address),
+		fmt.Sprintf("https://api.dexscreener.com/latest/dex/tokens/%s", address),
+	}
+	for _, rawURL := range dexURLs {
+		pairs, err := s.fetchDexScreenerPairs(ctx, rawURL)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("%s: %w", rawURL, err))
+			continue
+		}
+		sawSuccessfulSource = true
+		pools := dexPairsToPoolSnapshots(pairs, chain, address)
+		if len(pools) > 0 {
+			return pools, nil
+		}
+	}
+
+	pools, err := s.discoverPoolsFromGeckoTerminal(ctx, chain, address)
+	if err != nil {
+		errs = append(errs, fmt.Errorf("geckoterminal pools: %w", err))
+		if sawSuccessfulSource {
+			return []PoolSnapshot{}, nil
+		}
+		return nil, poolDiscoveryError(errs)
+	}
+	return pools, nil
+}
+
+func (s *Service) fetchDexScreenerPairs(ctx context.Context, rawURL string) ([]dexScreenerPair, error) {
+	reqCtx, cancel := context.WithTimeout(ctx, onchainPoolDiscoveryAttemptTimeout)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(reqCtx, http.MethodGet, rawURL, nil)
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("Accept", "application/json")
+	req.Header.Set("User-Agent", "NOFX-Onchain/1.0")
 	resp, err := s.httpClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
-	pairs, err := decodeDexScreenerPairs(resp, 4<<20)
-	if err != nil {
-		return nil, err
-	}
+	return decodeDexScreenerPairs(resp, 4<<20)
+}
 
+func dexPairsToPoolSnapshots(pairs []dexScreenerPair, chain, address string) []PoolSnapshot {
 	out := make([]PoolSnapshot, 0, len(pairs))
 	for _, pair := range pairs {
 		baseIsTarget := strings.EqualFold(pair.BaseToken.Address, address)
@@ -193,7 +270,113 @@ func (s *Service) discoverPools(ctx context.Context, chain, address string) ([]P
 	sort.SliceStable(out, func(i, j int) bool {
 		return out[i].LiquidityUSD > out[j].LiquidityUSD
 	})
-	return out, nil
+	return out
+}
+
+func (s *Service) discoverPoolsFromGeckoTerminal(ctx context.Context, chain, address string) ([]PoolSnapshot, error) {
+	reqCtx, cancel := context.WithTimeout(ctx, onchainPoolDiscoveryAttemptTimeout)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(
+		reqCtx,
+		http.MethodGet,
+		fmt.Sprintf("https://api.geckoterminal.com/api/v2/networks/%s/tokens/%s/pools?include=base_token,quote_token", chain, address),
+		nil,
+	)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("User-Agent", "NOFX-Onchain/1.0")
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	var decoded geckoPoolsResponse
+	if err := decodeJSONLimited(resp, &decoded, 4<<20); err != nil {
+		return nil, err
+	}
+	return geckoPoolsToPoolSnapshots(decoded, chain, address), nil
+}
+
+func geckoPoolsToPoolSnapshots(decoded geckoPoolsResponse, chain, address string) []PoolSnapshot {
+	tokens := make(map[string]geckoIncludedResource, len(decoded.Included))
+	for _, item := range decoded.Included {
+		if item.Type == "token" && item.ID != "" {
+			tokens[item.ID] = item
+		}
+	}
+
+	out := make([]PoolSnapshot, 0, len(decoded.Data))
+	for _, pool := range decoded.Data {
+		base := tokens[pool.Relationships.BaseToken.Data.ID]
+		quote := tokens[pool.Relationships.QuoteToken.Data.ID]
+		baseAddr := normalizeAddress(base.Attributes.Address)
+		quoteAddr := normalizeAddress(quote.Attributes.Address)
+		baseIsTarget := baseAddr == address
+		quoteIsTarget := quoteAddr == address
+		if !baseIsTarget && !quoteIsTarget {
+			continue
+		}
+		dexID := pool.Relationships.Dex.Data.ID
+		if !strings.Contains(strings.ToLower(dexID), "pancake") {
+			continue
+		}
+
+		tokenName := base.Attributes.Name
+		tokenSymbol := base.Attributes.Symbol
+		quoteSymbol := quote.Attributes.Symbol
+		if quoteIsTarget {
+			tokenName = quote.Attributes.Name
+			tokenSymbol = quote.Attributes.Symbol
+			quoteSymbol = base.Attributes.Symbol
+		}
+		createdAtMS := int64(0)
+		if pool.Attributes.PoolCreatedAt != "" {
+			createdAtMS = msFromISO(pool.Attributes.PoolCreatedAt)
+		}
+		out = append(out, PoolSnapshot{
+			ChainID:      chain,
+			DexID:        dexID,
+			Address:      normalizeAddress(pool.Attributes.Address),
+			Name:         strings.TrimSpace(pool.Attributes.Name),
+			BaseToken:    baseAddr,
+			BaseSymbol:   tokenSymbol,
+			QuoteToken:   quoteAddr,
+			QuoteSymbol:  quoteSymbol,
+			TokenName:    tokenName,
+			PriceUSD:     pool.Attributes.TokenPriceUSD,
+			LiquidityUSD: parseFloatString(pool.Attributes.ReserveInUSD),
+			Volume24hUSD: parseFloatString(pool.Attributes.VolumeUSD.H24),
+			PairURL:      "https://www.geckoterminal.com/" + chain + "/pools/" + normalizeAddress(pool.Attributes.Address),
+			CreatedAtMS:  createdAtMS,
+		})
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		return out[i].LiquidityUSD > out[j].LiquidityUSD
+	})
+	return out
+}
+
+func poolDiscoveryError(errs []error) error {
+	if len(errs) == 0 {
+		return fmt.Errorf("no PancakeSwap pools found for token")
+	}
+	messages := make([]string, 0, len(errs))
+	for _, err := range errs {
+		if err != nil {
+			messages = append(messages, err.Error())
+		}
+	}
+	details := strings.Join(messages, "; ")
+	lower := strings.ToLower(details)
+	if strings.Contains(lower, "client.timeout") ||
+		strings.Contains(lower, "context deadline exceeded") ||
+		strings.Contains(lower, "i/o timeout") ||
+		strings.Contains(lower, "timeout") {
+		return fmt.Errorf("on-chain data source timeout: server cannot reliably reach DexScreener/GeckoTerminal; configure ONCHAIN_HTTP_PROXY or check outbound network. details: %s", details)
+	}
+	return fmt.Errorf("on-chain pool discovery failed: %s", details)
 }
 
 func poolsToStore(pools []PoolSnapshot, chain, tokenAddress string) []store.OnchainPool {

@@ -26,11 +26,20 @@ detect_compose() {
 set_env_var() {
   local key="$1"
   local value="$2"
-  if grep -q "^${key}=" .env 2>/dev/null; then
-    sed -i "s|^${key}=.*|${key}=${value}|" .env
-  else
-    printf '%s=%s\n' "$key" "$value" >> .env
-  fi
+  local tmp
+  tmp="$(mktemp)"
+  [ -f .env ] && grep -v "^${key}=" .env >"$tmp" || true
+  printf '%s=%s\n' "$key" "$value" >>"$tmp"
+  mv "$tmp" .env
+}
+
+unset_env_var() {
+  local key="$1"
+  local tmp
+  [ -f .env ] || return 0
+  tmp="$(mktemp)"
+  grep -v "^${key}=" .env >"$tmp" || true
+  mv "$tmp" .env
 }
 
 env_value() {
@@ -82,6 +91,12 @@ ensure_env() {
   [ -n "$(env_value DB_TYPE)" ] || set_env_var DB_TYPE "sqlite"
   [ -n "$(env_value DB_PATH)" ] || set_env_var DB_PATH "data/data.db"
   [ -n "$(env_value TRANSPORT_ENCRYPTION)" ] || set_env_var TRANSPORT_ENCRYPTION "false"
+  unset_env_var ONCHAINHTTPPROXY
+  if [ -n "${ONCHAIN_HTTP_PROXY:-}" ]; then
+    set_env_var ONCHAIN_HTTP_PROXY "$ONCHAIN_HTTP_PROXY"
+  elif [ -n "${DEPLOY_ONCHAIN_HTTP_PROXY:-}" ]; then
+    set_env_var ONCHAIN_HTTP_PROXY "$DEPLOY_ONCHAIN_HTTP_PROXY"
+  fi
   ensure_csv_env_values NO_PROXY localhost 127.0.0.1 ::1 nofx nofx-frontend nofx-data-gateway
   ensure_csv_env_values no_proxy localhost 127.0.0.1 ::1 nofx nofx-frontend nofx-data-gateway
 
@@ -91,11 +106,33 @@ ensure_env() {
   if [ -z "$(env_value DATA_ENCRYPTION_KEY)" ]; then
     set_env_var DATA_ENCRYPTION_KEY "$(openssl rand -base64 32)"
   fi
-  if [ -z "$(env_value RSA_PRIVATE_KEY)" ]; then
-    local rsa_key
-    rsa_key="$(openssl genrsa 2048 2>/dev/null | awk '{printf "%s\\\\n", $0}')"
-    set_env_var RSA_PRIVATE_KEY "\"${rsa_key}\""
+  local rsa_key
+  rsa_key="$(env_value RSA_PRIVATE_KEY)"
+  if ! rsa_key_is_valid "$rsa_key"; then
+    log "Generating RSA_PRIVATE_KEY"
+    rsa_key="$(generate_rsa_private_key_env)"
+    set_env_var RSA_PRIVATE_KEY "${rsa_key}"
   fi
+}
+
+rsa_key_is_valid() {
+  local key="${1:-}"
+  [ -n "$key" ] || return 1
+  printf '%b' "$key" | openssl rsa -check -noout >/dev/null 2>&1
+}
+
+generate_rsa_private_key_env() {
+  openssl genrsa 2048 2>/dev/null | awk '{printf "%s\\n", $0}'
+}
+
+remove_conflicting_containers() {
+  local name
+  for name in nofx-data-gateway nofx-trading nofx-frontend; do
+    if docker ps -a --format '{{.Names}}' | grep -qx "$name"; then
+      log "Removing existing container: ${name}"
+      docker rm -f "$name" >/dev/null 2>&1 || true
+    fi
+  done
 }
 
 wait_http() {
@@ -136,6 +173,8 @@ main() {
   log "Creating docker network if missing"
   docker network inspect nofx-network >/dev/null 2>&1 || docker network create nofx-network >/dev/null
 
+  remove_conflicting_containers
+
   log "Building and starting services"
   "${COMPOSE_CMD[@]}" -f "$COMPOSE_FILE" up -d --build nofx-data-gateway nofx nofx-frontend
 
@@ -167,6 +206,14 @@ main() {
 
   log "Deployment complete"
   "${COMPOSE_CMD[@]}" -f "$COMPOSE_FILE" ps
+  if [ -n "${ONCHAIN_SMOKE_ADDRESS:-}" ]; then
+    log "Checking on-chain recent analysis smoke test"
+    curl -fsS --max-time 45 "http://127.0.0.1:${backend_port:-8080}/api/onchain/token-analysis?chain=${ONCHAIN_SMOKE_CHAIN:-bsc}&address=${ONCHAIN_SMOKE_ADDRESS}&depth=recent" >/tmp/nofx-onchain-smoke.json || {
+      "${COMPOSE_CMD[@]}" -f "$COMPOSE_FILE" logs --tail=120 nofx
+      fail "on-chain smoke test failed"
+    }
+    log "on-chain smoke test passed"
+  fi
   log "Frontend: http://SERVER_IP:${frontend_port:-3000}"
   log "Backend:  http://SERVER_IP:${backend_port:-8080}"
   log "Gateway:  http://SERVER_IP:${gateway_port:-8090}/health"
