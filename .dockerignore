@@ -35,7 +35,7 @@ docs/
 # Runtime data
 decision_logs/
 *.log
-data/
+/data/
 *.db
 *.sqlite
 *.sqlite3
