@@ -13,6 +13,10 @@ nofx-auto
 nofx
 nofx_test
 
+# 本地发布/部署打包产物
+release/*.tar.gz
+release/nofx-baota-oneclick-*.sh
+
 # Go 相关
 *.test
 *.out
