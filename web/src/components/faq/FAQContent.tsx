@@ -116,25 +116,25 @@ export function FAQContent({
                               Criteria）。
                             </li>
                             <li>评论“assign me”或自助分配（若权限允许）。</li>
-                            <li>Fork 仓库到你的 GitHub 账户。</li>
+                            <li>Fork 当前仓库到你的 GitHub 账户。</li>
                             <li>
-                              同步你的 fork 的 <code>dev</code>{' '}
-                              分支与上游保持一致：
+                              同步你的 fork 的 <code>codex/binance-testnet</code>{' '}
+                              分支与当前独立仓库保持一致：
                               <code className="ml-2">
-                                git remote add upstream
-                                https://github.com/NoFxAiOS/nofx.git
+                                git remote add source
+                                https://github.com/hereww/nofx-bnbtest.git
                               </code>
                               <br />
-                              <code>git fetch upstream</code>
+                              <code>git fetch source</code>
                               <br />
-                              <code>git checkout dev</code>
+                              <code>git checkout codex/binance-testnet</code>
                               <br />
-                              <code>git rebase upstream/dev</code>
+                              <code>git rebase source/codex/binance-testnet</code>
                               <br />
-                              <code>git push origin dev</code>
+                              <code>git push origin codex/binance-testnet</code>
                             </li>
                             <li>
-                              从你的 fork 的 <code>dev</code> 建立特性分支：
+                              从你的 fork 的 <code>codex/binance-testnet</code> 建立特性分支：
                               <code className="ml-2">
                                 git checkout -b feat/your-topic
                               </code>
@@ -146,15 +146,15 @@ export function FAQContent({
                               </code>
                             </li>
                             <li>
-                              打开 PR：base 选择 <code>NoFxAiOS/nofx:dev</code>{' '}
+                              打开 PR：base 选择 <code>hereww/nofx-bnbtest:codex/binance-testnet</code>{' '}
                               ← compare 选择{' '}
-                              <code>你的用户名/nofx:feat/your-topic</code>。
+                              <code>你的用户名/nofx-bnbtest:feat/your-topic</code>。
                             </li>
                             <li>
                               在 PR 中关联 Issue（示例：
                               <code className="ml-1">Closes #123</code>
                               ），选择正确 PR 模板；必要时与{' '}
-                              <code>upstream/dev</code>{' '}
+                              <code>source/codex/binance-testnet</code>{' '}
                               同步（rebase）后继续推送。
                             </li>
                           </>
@@ -171,25 +171,25 @@ export function FAQContent({
                             <li>
                               Comment "assign me" or self-assign (if permitted).
                             </li>
-                            <li>Fork the repository to your GitHub account.</li>
+                            <li>Fork the current repository to your GitHub account.</li>
                             <li>
-                              Sync your fork's <code>dev</code> with upstream:
+                              Sync your fork's <code>codex/binance-testnet</code> with the independent source repo:
                               <code className="ml-2">
-                                git remote add upstream
-                                https://github.com/NoFxAiOS/nofx.git
+                                git remote add source
+                                https://github.com/hereww/nofx-bnbtest.git
                               </code>
                               <br />
-                              <code>git fetch upstream</code>
+                              <code>git fetch source</code>
                               <br />
-                              <code>git checkout dev</code>
+                              <code>git checkout codex/binance-testnet</code>
                               <br />
-                              <code>git rebase upstream/dev</code>
+                              <code>git rebase source/codex/binance-testnet</code>
                               <br />
-                              <code>git push origin dev</code>
+                              <code>git push origin codex/binance-testnet</code>
                             </li>
                             <li>
                               Create a feature branch from your fork's{' '}
-                              <code>dev</code>:
+                              <code>codex/binance-testnet</code>:
                               <code className="ml-2">
                                 git checkout -b feat/your-topic
                               </code>
@@ -201,15 +201,15 @@ export function FAQContent({
                               </code>
                             </li>
                             <li>
-                              Open a PR: base <code>NoFxAiOS/nofx:dev</code> ←
+                              Open a PR: base <code>hereww/nofx-bnbtest:codex/binance-testnet</code> ←
                               compare{' '}
-                              <code>your-username/nofx:feat/your-topic</code>.
+                              <code>your-username/nofx-bnbtest:feat/your-topic</code>.
                             </li>
                             <li>
                               In PR, reference the Issue (e.g.,{' '}
                               <code className="ml-1">Closes #123</code>) and
                               choose the proper PR template; rebase onto{' '}
-                              <code>upstream/dev</code> as needed.
+                              <code>source/codex/binance-testnet</code> as needed.
                             </li>
                           </>
                         )}
@@ -229,7 +229,7 @@ export function FAQContent({
                             Bounty/奖金、荣誉徽章与鸣谢、优先
                             Review/合并与内测资格 等）。 可在任务中优先选择带
                             <a
-                              href="https://github.com/NoFxAiOS/nofx/labels/bounty"
+                              href="https://github.com/hereww/nofx-bnbtest/labels/bounty"
                               target="_blank"
                               rel="noreferrer"
                               style={{ color: '#F0B90B' }}
@@ -238,7 +238,7 @@ export function FAQContent({
                             </a>
                             的事项，或完成后提交
                             <a
-                              href="https://github.com/NoFxAiOS/nofx/blob/dev/.github/ISSUE_TEMPLATE/bounty_claim.md"
+                              href="https://github.com/hereww/nofx-bnbtest/blob/codex/binance-testnet/.github/ISSUE_TEMPLATE/bounty_claim.md"
                               target="_blank"
                               rel="noreferrer"
                               style={{ color: '#F0B90B' }}
@@ -254,7 +254,7 @@ export function FAQContent({
                             bounties, badges & shout-outs, priority
                             review/merge, beta access). Prefer tasks with
                             <a
-                              href="https://github.com/NoFxAiOS/nofx/labels/bounty"
+                              href="https://github.com/hereww/nofx-bnbtest/labels/bounty"
                               target="_blank"
                               rel="noreferrer"
                               style={{ color: '#F0B90B' }}
@@ -263,7 +263,7 @@ export function FAQContent({
                             </a>
                             , or file a
                             <a
-                              href="https://github.com/NoFxAiOS/nofx/blob/dev/.github/ISSUE_TEMPLATE/bounty_claim.md"
+                              href="https://github.com/hereww/nofx-bnbtest/blob/codex/binance-testnet/.github/ISSUE_TEMPLATE/bounty_claim.md"
                               target="_blank"
                               rel="noreferrer"
                               style={{ color: '#F0B90B' }}
@@ -280,7 +280,7 @@ export function FAQContent({
                       <div className="text-base">
                         {language === 'zh' ? '参考文档：' : 'References:'}{' '}
                         <a
-                          href="https://github.com/NoFxAiOS/nofx/blob/dev/CONTRIBUTING.md"
+                          href="https://github.com/hereww/nofx-bnbtest/blob/codex/binance-testnet/CONTRIBUTING.md"
                           target="_blank"
                           rel="noreferrer"
                           className="text-nofx-gold hover:underline"
@@ -289,7 +289,7 @@ export function FAQContent({
                         </a>
                         {'  |  '}
                         <a
-                          href="https://github.com/NoFxAiOS/nofx/blob/dev/.github/PR_TITLE_GUIDE.md"
+                          href="https://github.com/hereww/nofx-bnbtest/blob/codex/binance-testnet/.github/PR_TITLE_GUIDE.md"
                           target="_blank"
                           rel="noreferrer"
                           className="text-nofx-gold hover:underline"
@@ -301,9 +301,8 @@ export function FAQContent({
                         {language === 'zh' ? (
                           <>
                             <li>
-                              Fork 仓库后，从你的 fork 的 <code>dev</code>{' '}
-                              分支创建特性分支；避免直接向上游 <code>main</code>{' '}
-                              提交。
+                              Fork 仓库后，从你的 fork 的 <code>codex/binance-testnet</code>{' '}
+                              分支创建特性分支；避免直接向基础分支提交。
                             </li>
                             <li>
                               分支命名：feat/…、fix/…、docs/…；提交信息遵循
@@ -324,10 +323,10 @@ export function FAQContent({
                             <li>
                               在 PR 中关联 Issue（示例：
                               <code className="ml-1">Closes #123</code>），PR
-                              目标选择 <code>NoFxAiOS/nofx:dev</code>。
+                              目标选择 <code>hereww/nofx-bnbtest:codex/binance-testnet</code>。
                             </li>
                             <li>
-                              保持与 <code>upstream/dev</code>{' '}
+                              保持与 <code>source/codex/binance-testnet</code>{' '}
                               同步（rebase），确保 CI 通过；尽量保持 PR
                               小而聚焦。
                             </li>
@@ -336,8 +335,7 @@ export function FAQContent({
                           <>
                             <li>
                               After forking, branch from your fork's{' '}
-                              <code>dev</code>; avoid direct commits to upstream{' '}
-                              <code>main</code>.
+                              <code>codex/binance-testnet</code>; avoid direct commits to the base branch.
                             </li>
                             <li>
                               Branch naming: feat/…, fix/…, docs/…; commit
@@ -361,10 +359,10 @@ export function FAQContent({
                             <li>
                               Link the Issue in PR (e.g.,{' '}
                               <code className="ml-1">Closes #123</code>) and
-                              target <code>NoFxAiOS/nofx:dev</code>.
+                              target <code>hereww/nofx-bnbtest:codex/binance-testnet</code>.
                             </li>
                             <li>
-                              Keep rebasing onto <code>upstream/dev</code>,
+                              Keep rebasing onto <code>source/codex/binance-testnet</code>,
                               ensure CI passes; prefer small and focused PRs.
                             </li>
                           </>
@@ -378,7 +376,7 @@ export function FAQContent({
                             我们为高质量贡献提供激励（Bounty/奖金、荣誉徽章与鸣谢、优先
                             Review/合并与内测资格 等）。 详情可关注带
                             <a
-                              href="https://github.com/NoFxAiOS/nofx/labels/bounty"
+                              href="https://github.com/hereww/nofx-bnbtest/labels/bounty"
                               target="_blank"
                               rel="noreferrer"
                               style={{ color: '#F0B90B' }}
@@ -387,7 +385,7 @@ export function FAQContent({
                             </a>
                             的任务，或使用
                             <a
-                              href="https://github.com/NoFxAiOS/nofx/blob/dev/.github/ISSUE_TEMPLATE/bounty_claim.md"
+                              href="https://github.com/hereww/nofx-bnbtest/blob/codex/binance-testnet/.github/ISSUE_TEMPLATE/bounty_claim.md"
                               target="_blank"
                               rel="noreferrer"
                               style={{ color: '#F0B90B' }}
@@ -403,7 +401,7 @@ export function FAQContent({
                             shout-outs, priority review/merge, beta access).
                             Look for tasks with
                             <a
-                              href="https://github.com/NoFxAiOS/nofx/labels/bounty"
+                              href="https://github.com/hereww/nofx-bnbtest/labels/bounty"
                               target="_blank"
                               rel="noreferrer"
                               style={{ color: '#F0B90B' }}
@@ -412,7 +410,7 @@ export function FAQContent({
                             </a>
                             , or submit a
                             <a
-                              href="https://github.com/NoFxAiOS/nofx/blob/dev/.github/ISSUE_TEMPLATE/bounty_claim.md"
+                              href="https://github.com/hereww/nofx-bnbtest/blob/codex/binance-testnet/.github/ISSUE_TEMPLATE/bounty_claim.md"
                               target="_blank"
                               rel="noreferrer"
                               style={{ color: '#F0B90B' }}

@@ -11,7 +11,7 @@ interface HeroSectionProps {
 }
 
 export default function HeroSection({ language }: HeroSectionProps) {
-  const { stars, daysOld, isLoading } = useGitHubStats('NoFxAiOS', 'nofx')
+  const { stars, daysOld, isLoading } = useGitHubStats('hereww', 'nofx-bnbtest')
   const animatedStars = useCounterAnimation({
     start: 0,
     end: stars,
