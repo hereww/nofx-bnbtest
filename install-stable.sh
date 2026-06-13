@@ -3,7 +3,7 @@
 # NOFX Stable Release Installation Script
 #
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/NoFxAiOS/nofx/release/stable/install-stable.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/hereww/nofx-bnbtest/codex/binance-testnet/install-stable.sh | bash
 #
 
 set -e
@@ -16,7 +16,8 @@ NC='\033[0m'
 
 INSTALL_DIR="${1:-$HOME/nofx}"
 COMPOSE_FILE="docker-compose.stable.yml"
-GITHUB_RAW="https://raw.githubusercontent.com/NoFxAiOS/nofx/release/stable"
+NOFX_REPO_REF="${NOFX_REPO_REF:-codex/binance-testnet}"
+GITHUB_RAW="https://raw.githubusercontent.com/hereww/nofx-bnbtest/${NOFX_REPO_REF}"
 
 echo -e "${BLUE}"
 echo "╔════════════════════════════════════════════════════════════╗"

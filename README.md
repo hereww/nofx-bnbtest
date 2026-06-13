@@ -8,7 +8,7 @@
 <p align="center">
   <a href="https://github.com/hereww/nofx-bnbtest/stargazers"><img src="https://img.shields.io/github/stars/hereww/nofx-bnbtest?style=for-the-badge" alt="Stars"></a>
   <a href="https://github.com/hereww/nofx-bnbtest/releases"><img src="https://img.shields.io/github/v/release/hereww/nofx-bnbtest?style=for-the-badge" alt="Release"></a>
-  <a href="https://github.com/hereww/nofx-bnbtest/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-AGPL--3.0-blue.svg?style=for-the-badge" alt="License"></a>
+  <a href="https://github.com/hereww/nofx-bnbtest/blob/codex/binance-testnet/LICENSE"><img src="https://img.shields.io/badge/License-AGPL--3.0-blue.svg?style=for-the-badge" alt="License"></a>
 </p>
 
 <p align="center">
@@ -41,7 +41,7 @@ NOFXi is a secondary development project based on the open-source **NOFX** auton
 What makes it different: **built-in [x402](https://x402.org) micropayments**. No API keys. Fund a USDC wallet and pay per request. Your wallet is your identity.
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/hereww/nofx-bnbtest/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/hereww/nofx-bnbtest/codex/binance-testnet/install.sh | bash
 ```
 
 Open **http://127.0.0.1:3000**. Done.
@@ -188,7 +188,7 @@ Crypto · US Stocks · Forex · Metals
 ### Linux / macOS
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/hereww/nofx-bnbtest/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/hereww/nofx-bnbtest/codex/binance-testnet/install.sh | bash
 ```
 
 ### Railway (Cloud)
@@ -198,7 +198,7 @@ curl -fsSL https://raw.githubusercontent.com/hereww/nofx-bnbtest/main/install.sh
 ### Docker
 
 ```bash
-curl -O https://raw.githubusercontent.com/hereww/nofx-bnbtest/main/docker-compose.prod.yml
+curl -O https://raw.githubusercontent.com/hereww/nofx-bnbtest/codex/binance-testnet/docker-compose.prod.yml
 docker compose -f docker-compose.prod.yml up -d
 ```
 
@@ -207,7 +207,7 @@ docker compose -f docker-compose.prod.yml up -d
 Install [Docker Desktop](https://www.docker.com/products/docker-desktop/), then:
 
 ```powershell
-curl -o docker-compose.prod.yml https://raw.githubusercontent.com/hereww/nofx-bnbtest/main/docker-compose.prod.yml
+curl -o docker-compose.prod.yml https://raw.githubusercontent.com/hereww/nofx-bnbtest/codex/binance-testnet/docker-compose.prod.yml
 docker compose -f docker-compose.prod.yml up -d
 ```
 
@@ -226,7 +226,7 @@ cd web && npm install && npm run dev  # frontend (new terminal)
 ### Update
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/hereww/nofx-bnbtest/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/hereww/nofx-bnbtest/codex/binance-testnet/install.sh | bash
 ```
 
 ---
@@ -252,7 +252,7 @@ Everything through the web UI at **http://127.0.0.1:3000**.
 **HTTP (quick):**
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/hereww/nofx-bnbtest/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/hereww/nofx-bnbtest/codex/binance-testnet/install.sh | bash
 # Access via http://YOUR_IP:3000
 ```
 
