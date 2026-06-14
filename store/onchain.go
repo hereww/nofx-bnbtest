@@ -352,6 +352,22 @@ func (s *OnchainStore) ListTransfersForGraph(chain, tokenAddress string, address
 	return transfers, err
 }
 
+func (s *OnchainStore) ListTransfers(chain, tokenAddress string) ([]OnchainTokenTransfer, error) {
+	var transfers []OnchainTokenTransfer
+	err := s.db.Where("chain = ? AND token_address = ?", normalizeChain(chain), normalizeAddress(tokenAddress)).
+		Order("block_number ASC, log_index ASC").
+		Find(&transfers).Error
+	return transfers, err
+}
+
+func (s *OnchainStore) ListSwaps(chain, tokenAddress string) ([]OnchainSwap, error) {
+	var swaps []OnchainSwap
+	err := s.db.Where("chain = ? AND token_address = ?", normalizeChain(chain), normalizeAddress(tokenAddress)).
+		Order("block_number ASC, log_index ASC").
+		Find(&swaps).Error
+	return swaps, err
+}
+
 func (s *OnchainStore) RecomputeWalletSnapshots(chain, tokenAddress string) error {
 	chain = normalizeChain(chain)
 	tokenAddress = normalizeAddress(tokenAddress)

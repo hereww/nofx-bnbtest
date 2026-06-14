@@ -8,22 +8,23 @@ type TokenAnalysisRequest struct {
 }
 
 type TokenAnalysisResponse struct {
-	Success      bool                 `json:"success"`
-	Chain        string               `json:"chain"`
-	Address      string               `json:"address"`
-	Depth        string               `json:"depth"`
-	Status       string               `json:"status"`
-	Completeness string               `json:"completeness"`
-	Message      string               `json:"message,omitempty"`
-	Token        TokenProfile         `json:"token"`
-	Security     *TokenSecurity       `json:"security,omitempty"`
-	Pools        []PoolSnapshot       `json:"pools,omitempty"`
-	Recent       *RecentTradeAnalysis `json:"recent,omitempty"`
-	Full         *FullHistoryAnalysis `json:"full,omitempty"`
-	DealerFlow   *DealerFlowAnalysis  `json:"dealer_flow,omitempty"`
-	RiskFlags    []string             `json:"risk_flags,omitempty"`
-	Source       []string             `json:"source,omitempty"`
-	Error        string               `json:"error,omitempty"`
+	Success         bool                     `json:"success"`
+	Chain           string                   `json:"chain"`
+	Address         string                   `json:"address"`
+	Depth           string                   `json:"depth"`
+	Status          string                   `json:"status"`
+	Completeness    string                   `json:"completeness"`
+	Message         string                   `json:"message,omitempty"`
+	Token           TokenProfile             `json:"token"`
+	Security        *TokenSecurity           `json:"security,omitempty"`
+	Pools           []PoolSnapshot           `json:"pools,omitempty"`
+	Recent          *RecentTradeAnalysis     `json:"recent,omitempty"`
+	Full            *FullHistoryAnalysis     `json:"full,omitempty"`
+	DealerFlow      *DealerFlowAnalysis      `json:"dealer_flow,omitempty"`
+	EarlyWalletFlow *EarlyWalletFlowResponse `json:"early_wallet_flow,omitempty"`
+	RiskFlags       []string                 `json:"risk_flags,omitempty"`
+	Source          []string                 `json:"source,omitempty"`
+	Error           string                   `json:"error,omitempty"`
 }
 
 type TokenProfile struct {
@@ -228,4 +229,116 @@ type WalletGraphEdge struct {
 	Amount   float64 `json:"amount,omitempty"`
 	Weight   float64 `json:"weight,omitempty"`
 	TxHash   string  `json:"tx_hash,omitempty"`
+}
+
+type EarlyWalletFlowRequest struct {
+	Chain     string `json:"chain"`
+	Address   string `json:"address"`
+	SeedCount int    `json:"seed_count,omitempty"`
+	MaxDepth  int    `json:"max_depth,omitempty"`
+}
+
+type EarlyWalletFlowResponse struct {
+	Success      bool                    `json:"success"`
+	Chain        string                  `json:"chain"`
+	Address      string                  `json:"address"`
+	Status       string                  `json:"status"`
+	Completeness string                  `json:"completeness"`
+	Message      string                  `json:"message,omitempty"`
+	Token        TokenProfile            `json:"token"`
+	SeedCount    int                     `json:"seed_count"`
+	MaxDepth     int                     `json:"max_depth"`
+	QuoteToken   string                  `json:"quote_token,omitempty"`
+	QuoteSymbol  string                  `json:"quote_symbol,omitempty"`
+	Summary      EarlyWalletFlowSummary  `json:"summary"`
+	Seeds        []EarlyWalletSeed       `json:"seeds,omitempty"`
+	Wallets      []EarlyWalletFlowWallet `json:"wallets,omitempty"`
+	Edges        []EarlyWalletFlowEdge   `json:"edges,omitempty"`
+	Error        string                  `json:"error,omitempty"`
+}
+
+type EarlyWalletFlowSummary struct {
+	Direction             string   `json:"direction"`
+	Confidence            string   `json:"confidence"`
+	SeedWalletCount       int      `json:"seed_wallet_count"`
+	TrackedWalletCount    int      `json:"tracked_wallet_count"`
+	MaxObservedDepth      int      `json:"max_observed_depth"`
+	TotalInitialBuyAmount float64  `json:"total_initial_buy_amount"`
+	TotalInitialCost      float64  `json:"total_initial_cost"`
+	SeedOwnSellAmount     float64  `json:"seed_own_sell_amount"`
+	SeedOwnSellValue      float64  `json:"seed_own_sell_value"`
+	DescendantSellAmount  float64  `json:"descendant_sell_amount"`
+	DescendantSellValue   float64  `json:"descendant_sell_value"`
+	TotalSellValue        float64  `json:"total_sell_value"`
+	RealizedPnL           float64  `json:"realized_pnl"`
+	RealizedPnLPct        float64  `json:"realized_pnl_pct"`
+	RemainingAmount       float64  `json:"remaining_amount"`
+	RemainingCost         float64  `json:"remaining_cost"`
+	TransferOutAmount     float64  `json:"transfer_out_amount"`
+	CostCoveragePct       float64  `json:"cost_coverage_pct"`
+	MissingSwapPriceCount int      `json:"missing_swap_price_count"`
+	IncompleteReasons     []string `json:"incomplete_reasons,omitempty"`
+}
+
+type EarlyWalletSeed struct {
+	Rank                  int     `json:"rank"`
+	Address               string  `json:"address"`
+	FirstBuyTime          int64   `json:"first_buy_time,omitempty"`
+	FirstBuyAt            string  `json:"first_buy_at,omitempty"`
+	FirstBuyBlock         int64   `json:"first_buy_block,omitempty"`
+	BuyCount              int     `json:"buy_count"`
+	BuyAmount             float64 `json:"buy_amount"`
+	BuyValue              float64 `json:"buy_value"`
+	AvgBuyPrice           float64 `json:"avg_buy_price"`
+	OwnSellAmount         float64 `json:"own_sell_amount"`
+	OwnSellValue          float64 `json:"own_sell_value"`
+	TransferOutAmount     float64 `json:"transfer_out_amount"`
+	CurrentBalance        float64 `json:"current_balance"`
+	RemainingCost         float64 `json:"remaining_cost"`
+	RealizedPnL           float64 `json:"realized_pnl"`
+	DescendantSellAmount  float64 `json:"descendant_sell_amount"`
+	DescendantSellValue   float64 `json:"descendant_sell_value"`
+	DescendantRealizedPnL float64 `json:"descendant_realized_pnl"`
+	TotalRealizedPnL      float64 `json:"total_realized_pnl"`
+	ChildCount            int     `json:"child_count"`
+}
+
+type EarlyWalletFlowWallet struct {
+	Address           string  `json:"address"`
+	RootAddress       string  `json:"root_address,omitempty"`
+	ParentAddress     string  `json:"parent_address,omitempty"`
+	Depth             int     `json:"depth"`
+	FirstSeenTime     int64   `json:"first_seen_time,omitempty"`
+	FirstSeenAt       string  `json:"first_seen_at,omitempty"`
+	BuyCount          int     `json:"buy_count"`
+	SellCount         int     `json:"sell_count"`
+	BuyAmount         float64 `json:"buy_amount"`
+	BuyValue          float64 `json:"buy_value"`
+	AvgBuyPrice       float64 `json:"avg_buy_price"`
+	SellAmount        float64 `json:"sell_amount"`
+	SellValue         float64 `json:"sell_value"`
+	TransferInAmount  float64 `json:"transfer_in_amount"`
+	TransferOutAmount float64 `json:"transfer_out_amount"`
+	CurrentBalance    float64 `json:"current_balance"`
+	AllocatedCost     float64 `json:"allocated_cost"`
+	RemainingCost     float64 `json:"remaining_cost"`
+	RealizedPnL       float64 `json:"realized_pnl"`
+	RealizedPnLPct    float64 `json:"realized_pnl_pct"`
+	CostCoveragePct   float64 `json:"cost_coverage_pct"`
+	EventCount        int     `json:"event_count"`
+	IncompletePricing int     `json:"incomplete_pricing"`
+	IsSeed            bool    `json:"is_seed"`
+}
+
+type EarlyWalletFlowEdge struct {
+	Source      string  `json:"source"`
+	Target      string  `json:"target"`
+	RootAddress string  `json:"root_address,omitempty"`
+	Depth       int     `json:"depth"`
+	Amount      float64 `json:"amount"`
+	Cost        float64 `json:"cost,omitempty"`
+	TxHash      string  `json:"tx_hash,omitempty"`
+	BlockNumber int64   `json:"block_number,omitempty"`
+	BlockTime   int64   `json:"block_time,omitempty"`
+	BlockAt     string  `json:"block_at,omitempty"`
 }

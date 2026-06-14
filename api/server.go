@@ -112,6 +112,8 @@ func (s *Server) setupRoutes() {
 		s.route(api, "GET", "/custom-tokens", "DEX market snapshots for monitored custom token contract addresses", s.handleCustomTokens)
 		s.route(api, "GET", "/onchain/token-analysis", "On-chain token holder, trade, and risk analysis by contract address", s.handleOnchainTokenAnalysis)
 		s.route(api, "GET", "/onchain/wallet-graph", "On-chain wallet relationship graph for one token", s.handleOnchainWalletGraph)
+		s.route(api, "GET", "/onchain/early-wallet-flow", "Early buyer wallet flow, cost basis, transfer descendants, and realized PnL by token", s.handleOnchainEarlyWalletFlow)
+		s.route(api, "GET", "/onchain/early-wallet-flow/export", "Export early buyer wallet flow analysis as CSV", s.handleOnchainEarlyWalletFlowExport)
 		s.route(api, "GET", "/onchain/index-status", "On-chain token index status by contract address", s.handleOnchainIndexStatus)
 		s.route(api, "POST", "/onchain/ai-report/preview", "Preview the AI prompt for an on-chain analysis report", s.handleOnchainAIReportPreview)
 		s.route(api, "POST", "/onchain/ai-report", "Generate an AI on-chain analysis report for one token", s.handleOnchainAIReport)
@@ -136,6 +138,7 @@ func (s *Server) setupRoutes() {
 			s.route(protected, "POST", "/agent/preferences", "Create persistent agent preference", s.handleCreateAgentPreference)
 			s.route(protected, "DELETE", "/agent/preferences/:id", "Delete persistent agent preference", s.handleDeleteAgentPreference)
 			s.route(protected, "POST", "/onchain/index-token", "Start full-history on-chain token indexing", s.handleOnchainIndexToken)
+			s.route(protected, "POST", "/onchain/early-wallet-flow/index", "Start full-history indexing for early wallet flow analysis", s.handleOnchainEarlyWalletFlowIndex)
 
 			// User account management
 			s.routeWithSchema(protected, "PUT", "/user/password", "Change current user password",

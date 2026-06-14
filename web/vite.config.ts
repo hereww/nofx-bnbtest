@@ -34,7 +34,7 @@ async function handleSystemConfigFallback(req, res, next) {
     return
   }
 
-  if ((path === '/api/onchain/token-analysis' || path === '/api/onchain/index-status' || path === '/api/onchain/wallet-graph') && req.method === 'GET') {
+  if ((path === '/api/onchain/token-analysis' || path === '/api/onchain/index-status' || path === '/api/onchain/wallet-graph' || path === '/api/onchain/early-wallet-flow') && req.method === 'GET') {
     const params = new URLSearchParams(req.url?.split('?')[1] || '')
     if (path === '/api/onchain/wallet-graph') {
       await forwardOrFallback(req, res, {
@@ -46,6 +46,41 @@ async function handleSystemConfigFallback(req, res, next) {
         error: '链上分析后端未启动。请启动 NOFX API 服务后再查看钱包关系网。',
         nodes: [],
         edges: [],
+      }, 503, 30_000)
+      return
+    }
+    if (path === '/api/onchain/early-wallet-flow') {
+      await forwardOrFallback(req, res, {
+        success: false,
+        chain: params.get('chain') || 'bsc',
+        address: params.get('address') || '',
+        status: 'backend_unavailable',
+        completeness: 'unavailable',
+        seed_count: 100,
+        max_depth: 4,
+        summary: {
+          direction: 'insufficient_data',
+          confidence: 'low',
+          seed_wallet_count: 0,
+          tracked_wallet_count: 0,
+          max_observed_depth: 0,
+          total_initial_buy_amount: 0,
+          total_initial_cost: 0,
+          seed_own_sell_amount: 0,
+          seed_own_sell_value: 0,
+          descendant_sell_amount: 0,
+          descendant_sell_value: 0,
+          total_sell_value: 0,
+          realized_pnl: 0,
+          realized_pnl_pct: 0,
+          remaining_amount: 0,
+          remaining_cost: 0,
+          transfer_out_amount: 0,
+          cost_coverage_pct: 0,
+          missing_swap_price_count: 0,
+          incomplete_reasons: ['backend_unavailable'],
+        },
+        error: '链上分析后端未启动。请启动 NOFX API 服务后再计算早期地址资金流。',
       }, 503, 30_000)
       return
     }
@@ -61,7 +96,7 @@ async function handleSystemConfigFallback(req, res, next) {
     return
   }
 
-  if (path === '/api/onchain/index-token' && req.method === 'POST') {
+  if ((path === '/api/onchain/index-token' || path === '/api/onchain/early-wallet-flow/index') && req.method === 'POST') {
     if (!(await isUpstreamAvailable())) {
       writeJSON(res, 503, {
         success: false,
