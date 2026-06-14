@@ -21,14 +21,15 @@ import (
 )
 
 type onchainAIReportRequest struct {
-	Chain       string                         `json:"chain"`
-	Address     string                         `json:"address"`
-	Depth       string                         `json:"depth"`
-	Language    string                         `json:"language"`
-	Analysis    *onchain.TokenAnalysisResponse `json:"analysis"`
-	WalletGraph *onchain.WalletGraphResponse   `json:"wallet_graph"`
-	ModelID     string                         `json:"model_id"`
-	Agent       onchainAIReportAgentConfig     `json:"agent"`
+	Chain           string                           `json:"chain"`
+	Address         string                           `json:"address"`
+	Depth           string                           `json:"depth"`
+	Language        string                           `json:"language"`
+	Analysis        *onchain.TokenAnalysisResponse   `json:"analysis"`
+	WalletGraph     *onchain.WalletGraphResponse     `json:"wallet_graph"`
+	EarlyWalletFlow *onchain.EarlyWalletFlowResponse `json:"early_wallet_flow"`
+	ModelID         string                           `json:"model_id"`
+	Agent           onchainAIReportAgentConfig       `json:"agent"`
 }
 
 type onchainAIReportAgentConfig struct {
@@ -68,6 +69,14 @@ func (s *Server) handleOnchainAIReportPreview(c *gin.Context) {
 	if analysis == nil || !analysis.Success {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "token analysis is required before previewing an AI report prompt"})
 		return
+	}
+	if req.EarlyWalletFlow != nil {
+		analysis.EarlyWalletFlow = req.EarlyWalletFlow
+	} else if analysis.EarlyWalletFlow == nil {
+		analysis.EarlyWalletFlow, _ = s.onchainService.EarlyWalletFlow(c.Request.Context(), onchain.EarlyWalletFlowRequest{
+			Chain:   analysis.Chain,
+			Address: analysis.Address,
+		})
 	}
 
 	walletGraph := req.WalletGraph
@@ -136,6 +145,14 @@ func (s *Server) handleOnchainAIReport(c *gin.Context) {
 	if analysis == nil || !analysis.Success {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "token analysis is required before generating an AI report"})
 		return
+	}
+	if req.EarlyWalletFlow != nil {
+		analysis.EarlyWalletFlow = req.EarlyWalletFlow
+	} else if analysis.EarlyWalletFlow == nil {
+		analysis.EarlyWalletFlow, _ = s.onchainService.EarlyWalletFlow(c.Request.Context(), onchain.EarlyWalletFlowRequest{
+			Chain:   analysis.Chain,
+			Address: analysis.Address,
+		})
 	}
 
 	userID := authenticatedOrDefaultUserID(c)
@@ -312,9 +329,9 @@ func describeOnchainAIReportError(model *store.AIModel, err error) (string, map[
 
 func buildOnchainAIReportSystemPrompt(language string) string {
 	if strings.EqualFold(language, "en") {
-		return "You are NOFXi's on-chain token risk analyst. The main goal is to judge whether suspected major wallets/dealer clusters are accumulating, distributing, mixed, or data-insufficient. Produce a concise trading-support report, not financial advice. Separate objective facts, inferred risks, and actionable monitoring steps. Use Markdown sections: Dealer Flow Verdict, Key On-chain Facts, Risk Signals, Wallet Relationship Interpretation, Monitoring Plan, Decision Notes. Keep it practical and conditional."
+		return "You are NOFXi's on-chain token risk analyst. The main goal is to judge whether suspected major wallets/dealer clusters are accumulating, distributing, mixed, or data-insufficient, including early-buyer cost basis and transfer-descendant selling when available. Produce a concise trading-support report, not financial advice. Never promise guaranteed profit. Separate objective facts, inferred risks, and actionable monitoring steps. Use Markdown sections: Dealer Flow Verdict, Early Wallet Cost Flow, Key On-chain Facts, Risk Signals, Wallet Relationship Interpretation, Monitoring Plan, Decision Notes. Keep it practical and conditional."
 	}
-	return "你是 NOFXi 的链上代币风险分析师。核心目标是判断疑似主力/庄家关联钱包是在进货、出货、多空混合，还是数据不足。生成一份交易辅助报告，不提供绝对买卖建议。请区分客观事实、推断风险和可执行监控步骤。使用 Markdown 小节：庄家资金流结论、关键链上事实、风险信号、钱包关系解读、后续监控计划、决策备注。语言要专业、谨慎、可执行。"
+	return "你是 NOFXi 的链上代币风险分析师。核心目标是判断疑似主力/庄家关联钱包是在进货、出货、多空混合，还是数据不足；如果有 early_wallet_flow，要重点解读前100早期买家成本、转出衍生地址卖出和已实现盈利。生成交易辅助报告，不提供绝对买卖建议，绝不能承诺保证盈利。请区分客观事实、推断风险和可执行监控步骤。使用 Markdown 小节：庄家资金流结论、早期地址成本流、关键链上事实、风险信号、钱包关系解读、后续监控计划、决策备注。语言要专业、谨慎、可执行。"
 }
 
 func buildOnchainAIReportPrompts(language string, agentConfig onchainAIReportAgentConfig, analysis *onchain.TokenAnalysisResponse, walletGraph *onchain.WalletGraphResponse) (string, string, string, error) {
@@ -408,42 +425,71 @@ func holderCountForSummary(analysis *onchain.TokenAnalysisResponse) int {
 
 func compactOnchainAnalysisForAI(analysis *onchain.TokenAnalysisResponse, walletGraph *onchain.WalletGraphResponse) (string, error) {
 	type compactReportInput struct {
-		Chain        string                       `json:"chain"`
-		Address      string                       `json:"address"`
-		Depth        string                       `json:"depth"`
-		Status       string                       `json:"status"`
-		Completeness string                       `json:"completeness"`
-		Token        onchain.TokenProfile         `json:"token"`
-		Security     *onchain.TokenSecurity       `json:"security,omitempty"`
-		Pools        []onchain.PoolSnapshot       `json:"pools,omitempty"`
-		Recent       *onchain.RecentTradeAnalysis `json:"recent,omitempty"`
-		Full         *onchain.FullHistoryAnalysis `json:"full,omitempty"`
-		DealerFlow   *onchain.DealerFlowAnalysis  `json:"dealer_flow,omitempty"`
-		WalletGraph  *compactWalletGraphSummary   `json:"wallet_graph_summary,omitempty"`
-		RiskFlags    []string                     `json:"risk_flags,omitempty"`
-		Source       []string                     `json:"source,omitempty"`
+		Chain           string                       `json:"chain"`
+		Address         string                       `json:"address"`
+		Depth           string                       `json:"depth"`
+		Status          string                       `json:"status"`
+		Completeness    string                       `json:"completeness"`
+		Token           onchain.TokenProfile         `json:"token"`
+		Security        *onchain.TokenSecurity       `json:"security,omitempty"`
+		Pools           []onchain.PoolSnapshot       `json:"pools,omitempty"`
+		Recent          *onchain.RecentTradeAnalysis `json:"recent,omitempty"`
+		Full            *onchain.FullHistoryAnalysis `json:"full,omitempty"`
+		DealerFlow      *onchain.DealerFlowAnalysis  `json:"dealer_flow,omitempty"`
+		EarlyWalletFlow *compactEarlyWalletFlow      `json:"early_wallet_flow,omitempty"`
+		WalletGraph     *compactWalletGraphSummary   `json:"wallet_graph_summary,omitempty"`
+		RiskFlags       []string                     `json:"risk_flags,omitempty"`
+		Source          []string                     `json:"source,omitempty"`
 	}
 	input := compactReportInput{
-		Chain:        analysis.Chain,
-		Address:      analysis.Address,
-		Depth:        analysis.Depth,
-		Status:       analysis.Status,
-		Completeness: analysis.Completeness,
-		Token:        analysis.Token,
-		Security:     compactSecurity(analysis.Security),
-		Pools:        firstPools(analysis.Pools, 5),
-		Recent:       compactRecent(analysis.Recent),
-		Full:         compactFull(analysis.Full),
-		DealerFlow:   analysis.DealerFlow,
-		WalletGraph:  compactWalletGraphForAI(walletGraph),
-		RiskFlags:    analysis.RiskFlags,
-		Source:       analysis.Source,
+		Chain:           analysis.Chain,
+		Address:         analysis.Address,
+		Depth:           analysis.Depth,
+		Status:          analysis.Status,
+		Completeness:    analysis.Completeness,
+		Token:           analysis.Token,
+		Security:        compactSecurity(analysis.Security),
+		Pools:           firstPools(analysis.Pools, 5),
+		Recent:          compactRecent(analysis.Recent),
+		Full:            compactFull(analysis.Full),
+		DealerFlow:      analysis.DealerFlow,
+		EarlyWalletFlow: compactEarlyWalletFlowForAI(analysis.EarlyWalletFlow),
+		WalletGraph:     compactWalletGraphForAI(walletGraph),
+		RiskFlags:       analysis.RiskFlags,
+		Source:          analysis.Source,
 	}
 	raw, err := json.MarshalIndent(input, "", "  ")
 	if err != nil {
 		return "", err
 	}
 	return string(raw), nil
+}
+
+type compactEarlyWalletFlow struct {
+	Status       string                          `json:"status"`
+	Completeness string                          `json:"completeness"`
+	SeedCount    int                             `json:"seed_count"`
+	MaxDepth     int                             `json:"max_depth"`
+	QuoteSymbol  string                          `json:"quote_symbol,omitempty"`
+	Summary      onchain.EarlyWalletFlowSummary  `json:"summary"`
+	TopSeeds     []onchain.EarlyWalletSeed       `json:"top_seeds,omitempty"`
+	KeyWallets   []onchain.EarlyWalletFlowWallet `json:"key_wallets,omitempty"`
+}
+
+func compactEarlyWalletFlowForAI(flow *onchain.EarlyWalletFlowResponse) *compactEarlyWalletFlow {
+	if flow == nil {
+		return nil
+	}
+	return &compactEarlyWalletFlow{
+		Status:       flow.Status,
+		Completeness: flow.Completeness,
+		SeedCount:    flow.SeedCount,
+		MaxDepth:     flow.MaxDepth,
+		QuoteSymbol:  flow.QuoteSymbol,
+		Summary:      flow.Summary,
+		TopSeeds:     firstEarlySeeds(flow.Seeds, 8),
+		KeyWallets:   firstEarlyWallets(flow.Wallets, 12),
+	}
 }
 
 type compactWalletGraphSummary struct {
@@ -574,6 +620,20 @@ func firstHolders(items []onchain.HolderSnapshot, limit int) []onchain.HolderSna
 }
 
 func firstWallets(items []onchain.WalletAnalysis, limit int) []onchain.WalletAnalysis {
+	if len(items) <= limit {
+		return items
+	}
+	return items[:limit]
+}
+
+func firstEarlySeeds(items []onchain.EarlyWalletSeed, limit int) []onchain.EarlyWalletSeed {
+	if len(items) <= limit {
+		return items
+	}
+	return items[:limit]
+}
+
+func firstEarlyWallets(items []onchain.EarlyWalletFlowWallet, limit int) []onchain.EarlyWalletFlowWallet {
 	if len(items) <= limit {
 		return items
 	}

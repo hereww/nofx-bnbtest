@@ -17,6 +17,8 @@ import {
   Eye,
   FileText,
   GitBranch,
+  Download,
+  Layers,
   Network,
   Plus,
   RefreshCcw,
@@ -95,6 +97,7 @@ type TokenAnalysis = {
     related_wallet_clusters?: WalletAnalysis[]
   }
   dealer_flow?: DealerFlowAnalysis
+  early_wallet_flow?: EarlyWalletFlowResponse
   risk_flags?: string[]
   error?: string
 }
@@ -136,6 +139,111 @@ type DealerFlowSignals = {
   owner_present?: boolean
   creator_present?: boolean
   high_risk_flag_count?: number
+}
+
+type EarlyWalletFlowSummary = {
+  direction: DealerDirection
+  confidence: DealerConfidence
+  seed_wallet_count: number
+  tracked_wallet_count: number
+  max_observed_depth: number
+  total_initial_buy_amount: number
+  total_initial_cost: number
+  seed_own_sell_amount: number
+  seed_own_sell_value: number
+  descendant_sell_amount: number
+  descendant_sell_value: number
+  total_sell_value: number
+  realized_pnl: number
+  realized_pnl_pct: number
+  remaining_amount: number
+  remaining_cost: number
+  transfer_out_amount: number
+  cost_coverage_pct: number
+  missing_swap_price_count: number
+  incomplete_reasons?: string[]
+}
+
+type EarlyWalletSeed = {
+  rank: number
+  address: string
+  first_buy_time?: number
+  first_buy_at?: string
+  first_buy_block?: number
+  buy_count: number
+  buy_amount: number
+  buy_value: number
+  avg_buy_price: number
+  own_sell_amount: number
+  own_sell_value: number
+  transfer_out_amount: number
+  current_balance: number
+  remaining_cost: number
+  realized_pnl: number
+  descendant_sell_amount: number
+  descendant_sell_value: number
+  descendant_realized_pnl: number
+  total_realized_pnl: number
+  child_count: number
+}
+
+type EarlyWalletFlowWallet = {
+  address: string
+  root_address?: string
+  parent_address?: string
+  depth: number
+  first_seen_time?: number
+  first_seen_at?: string
+  buy_count: number
+  sell_count: number
+  buy_amount: number
+  buy_value: number
+  avg_buy_price: number
+  sell_amount: number
+  sell_value: number
+  transfer_in_amount: number
+  transfer_out_amount: number
+  current_balance: number
+  allocated_cost: number
+  remaining_cost: number
+  realized_pnl: number
+  realized_pnl_pct: number
+  cost_coverage_pct: number
+  event_count: number
+  incomplete_pricing: number
+  is_seed: boolean
+}
+
+type EarlyWalletFlowEdge = {
+  source: string
+  target: string
+  root_address?: string
+  depth: number
+  amount: number
+  cost?: number
+  tx_hash?: string
+  block_number?: number
+  block_time?: number
+  block_at?: string
+}
+
+type EarlyWalletFlowResponse = {
+  success: boolean
+  chain: string
+  address: string
+  status: string
+  completeness: string
+  message?: string
+  token?: { name?: string; symbol?: string }
+  seed_count: number
+  max_depth: number
+  quote_token?: string
+  quote_symbol?: string
+  summary: EarlyWalletFlowSummary
+  seeds?: EarlyWalletSeed[]
+  wallets?: EarlyWalletFlowWallet[]
+  edges?: EarlyWalletFlowEdge[]
+  error?: string
 }
 
 type WalletGraphNode = {
@@ -195,6 +303,9 @@ type ManagedAnalysisToken = {
   walletGraph?: WalletGraphResponse
   walletGraphError?: string
   walletGraphLoading?: boolean
+  earlyWalletFlow?: EarlyWalletFlowResponse
+  earlyWalletFlowError?: string
+  earlyWalletFlowLoading?: boolean
   error?: string
   isLoading?: boolean
   updatedAt?: string
@@ -276,6 +387,7 @@ export function OnchainAnalysisPage() {
       aiReportLoading: _aiReportLoading,
       aiReportPromptLoading: _aiReportPromptLoading,
       walletGraphLoading: _walletGraphLoading,
+      earlyWalletFlowLoading: _earlyWalletFlowLoading,
       ...token
     }) => token)))
   }, [analysisTokens])
@@ -357,7 +469,17 @@ export function OnchainAnalysisPage() {
       const checkedAt = new Date().toISOString()
       setAnalysisTokens((items) => items.map((item) => (
         item.id === tokenID
-          ? { ...item, depth, analysis, label, error: '', isLoading: false, updatedAt: checkedAt, lastCheckedAt: checkedAt }
+          ? {
+            ...item,
+            depth,
+            analysis,
+            label,
+            earlyWalletFlow: analysis.early_wallet_flow || item.earlyWalletFlow,
+            error: '',
+            isLoading: false,
+            updatedAt: checkedAt,
+            lastCheckedAt: checkedAt,
+          }
           : item
       )))
       return analysis
@@ -406,7 +528,12 @@ export function OnchainAnalysisPage() {
       if (!walletGraph || walletGraph.depth !== tokenConfig.depth) {
         walletGraph = await loadWalletGraph(tokenID)
       }
+      let earlyWalletFlow = tokenConfig.earlyWalletFlow
+      if (!earlyWalletFlow) {
+        earlyWalletFlow = await loadEarlyWalletFlow(tokenID)
+      }
       const analysisForReport = mergeAnalysisWithWalletGraph(analysis, walletGraph)
+      const reportAnalysis = mergeAnalysisWithEarlyWalletFlow(analysisForReport, earlyWalletFlow)
       const res = await fetch('/api/onchain/ai-report', {
         method: 'POST',
         headers: getJSONHeaders(token),
@@ -415,8 +542,9 @@ export function OnchainAnalysisPage() {
           address: tokenConfig.address,
           depth: tokenConfig.depth,
           language,
-          analysis: analysisForReport,
+          analysis: reportAnalysis,
           wallet_graph: walletGraph,
+          early_wallet_flow: earlyWalletFlow,
           model_id: getReportModelIDForRequest(reportAgentConfig.modelID, aiModels),
           agent: toReportAgentAPIConfig(reportAgentConfig),
         }),
@@ -492,7 +620,12 @@ export function OnchainAnalysisPage() {
       if (!walletGraph || walletGraph.depth !== tokenConfig.depth) {
         walletGraph = await loadWalletGraph(tokenID)
       }
+      let earlyWalletFlow = tokenConfig.earlyWalletFlow
+      if (!earlyWalletFlow) {
+        earlyWalletFlow = await loadEarlyWalletFlow(tokenID)
+      }
       const analysisForPrompt = mergeAnalysisWithWalletGraph(analysis, walletGraph)
+      const promptAnalysis = mergeAnalysisWithEarlyWalletFlow(analysisForPrompt, earlyWalletFlow)
       const res = await fetch('/api/onchain/ai-report/preview', {
         method: 'POST',
         headers: getJSONHeaders(token),
@@ -501,8 +634,9 @@ export function OnchainAnalysisPage() {
           address: tokenConfig.address,
           depth: tokenConfig.depth,
           language,
-          analysis: analysisForPrompt,
+          analysis: promptAnalysis,
           wallet_graph: walletGraph,
+          early_wallet_flow: earlyWalletFlow,
           model_id: getReportModelIDForRequest(reportAgentConfig.modelID, aiModels),
           agent: toReportAgentAPIConfig(reportAgentConfig),
         }),
@@ -586,6 +720,91 @@ export function OnchainAnalysisPage() {
           : item
       )))
     }
+  }
+
+  async function startEarlyWalletFlowIndex(tokenID: string) {
+    const tokenConfig = analysisTokens.find((item) => item.id === tokenID)
+    if (!tokenConfig) return
+
+    setAnalysisManagerError('')
+    setAnalysisTokens((items) => items.map((item) => (
+      item.id === tokenID ? { ...item, earlyWalletFlowLoading: true, earlyWalletFlowError: '' } : item
+    )))
+    try {
+      const res = await fetch('/api/onchain/early-wallet-flow/index', {
+        method: 'POST',
+        headers: getJSONHeaders(token),
+        body: JSON.stringify({ chain: tokenConfig.chain, address: tokenConfig.address }),
+      })
+      const data = await readAPIJSON<APIErrorBody>(res)
+      if (!res.ok) {
+        throw new Error(getAPIErrorMessage(data, `HTTP ${res.status}`))
+      }
+      await loadEarlyWalletFlow(tokenID)
+    } catch (err) {
+      setAnalysisTokens((items) => items.map((item) => (
+        item.id === tokenID
+          ? { ...item, earlyWalletFlowLoading: false, earlyWalletFlowError: err instanceof Error ? err.message : 'Early wallet flow index failed' }
+          : item
+      )))
+    }
+  }
+
+  async function loadEarlyWalletFlow(tokenID: string): Promise<EarlyWalletFlowResponse | undefined> {
+    const tokenConfig = analysisTokens.find((item) => item.id === tokenID)
+    if (!tokenConfig) return undefined
+    setAnalysisTokens((items) => items.map((item) => (
+      item.id === tokenID ? { ...item, earlyWalletFlowLoading: true, earlyWalletFlowError: '' } : item
+    )))
+    try {
+      const params = new URLSearchParams({
+        chain: tokenConfig.chain,
+        address: tokenConfig.address,
+        seed_count: '100',
+        max_depth: '4',
+      })
+      const res = await fetch(`/api/onchain/early-wallet-flow?${params.toString()}`)
+      const data = await readAPIJSON<EarlyWalletFlowResponse & APIErrorBody>(res)
+      if (!res.ok) {
+        throw new Error(getAPIErrorMessage(data, `HTTP ${res.status}`))
+      }
+      if (Object.keys(data).length === 0) {
+        throw new Error(language === 'zh' ? '早期地址资金流接口返回了空响应。' : 'Early wallet flow API returned an empty response.')
+      }
+      const flow = data as EarlyWalletFlowResponse
+      setAnalysisTokens((items) => items.map((item) => (
+        item.id === tokenID
+          ? {
+            ...item,
+            label: flow.token?.symbol || flow.token?.name || item.label,
+            analysis: mergeAnalysisWithEarlyWalletFlow(item.analysis, flow),
+            earlyWalletFlow: flow,
+            earlyWalletFlowLoading: false,
+            earlyWalletFlowError: '',
+          }
+          : item
+      )))
+      return flow
+    } catch (err) {
+      setAnalysisTokens((items) => items.map((item) => (
+        item.id === tokenID
+          ? { ...item, earlyWalletFlowLoading: false, earlyWalletFlowError: err instanceof Error ? err.message : 'Early wallet flow failed' }
+          : item
+      )))
+      return undefined
+    }
+  }
+
+  function exportEarlyWalletFlow(tokenID: string) {
+    const tokenConfig = analysisTokens.find((item) => item.id === tokenID)
+    if (!tokenConfig) return
+    const params = new URLSearchParams({
+      chain: tokenConfig.chain,
+      address: tokenConfig.address,
+      seed_count: '100',
+      max_depth: '4',
+    })
+    window.location.href = `/api/onchain/early-wallet-flow/export?${params.toString()}`
   }
 
   async function loadWalletGraph(tokenID: string): Promise<WalletGraphResponse | undefined> {
@@ -910,6 +1129,11 @@ export function OnchainAnalysisPage() {
                       {selectedToken.aiReportError}
                     </div>
                   )}
+                  {selectedToken.earlyWalletFlowError && (
+                    <div className="mt-4 rounded-md border border-cyan-300/25 bg-cyan-300/[0.08] px-3 py-2 text-sm text-cyan-100">
+                      {selectedToken.earlyWalletFlowError}
+                    </div>
+                  )}
                   {selectedToken.walletGraphError && (
                     <div className="mt-4 rounded-md border border-emerald-300/25 bg-emerald-300/[0.08] px-3 py-2 text-sm text-emerald-100">
                       {selectedToken.walletGraphError}
@@ -917,6 +1141,15 @@ export function OnchainAnalysisPage() {
                   )}
                   {selectedAnalysis?.message && <p className="mt-3 text-sm text-amber-100">{selectedAnalysis.message}</p>}
                 </div>
+
+                <EarlyWalletFlowPanel
+                  flow={selectedToken.earlyWalletFlow || selectedAnalysis?.early_wallet_flow}
+                  language={language}
+                  loading={Boolean(selectedToken.earlyWalletFlowLoading)}
+                  onLoad={() => loadEarlyWalletFlow(selectedToken.id)}
+                  onStartIndex={() => startEarlyWalletFlowIndex(selectedToken.id)}
+                  onExport={() => exportEarlyWalletFlow(selectedToken.id)}
+                />
 
                 {selectedAnalysis ? (
                   <section className="rounded-lg border border-[#F0B90B]/20 bg-[#F0B90B]/[0.04] p-4 2xl:p-5">
@@ -959,6 +1192,23 @@ export function OnchainAnalysisPage() {
                       >
                         <Brain className="h-3.5 w-3.5" />
                         {selectedToken.aiReportLoading ? (language === 'zh' ? '生成报告中' : 'Writing report') : (language === 'zh' ? '查看 AI 报告' : 'View AI report')}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => loadEarlyWalletFlow(selectedToken.id)}
+                        disabled={selectedToken.earlyWalletFlowLoading}
+                        className="inline-flex w-fit items-center gap-2 rounded-md border border-orange-300/25 bg-orange-300/10 px-3 py-1.5 text-xs font-semibold text-orange-100 disabled:opacity-60"
+                      >
+                        <Layers className="h-3.5 w-3.5" />
+                        {selectedToken.earlyWalletFlowLoading ? (language === 'zh' ? '计算中' : 'Calculating') : (language === 'zh' ? '早期资金流' : 'Early flow')}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => exportEarlyWalletFlow(selectedToken.id)}
+                        className="inline-flex w-fit items-center gap-2 rounded-md border border-white/10 bg-white/[0.05] px-3 py-1.5 text-xs font-semibold text-zinc-100"
+                      >
+                        <Download className="h-3.5 w-3.5" />
+                        CSV
                       </button>
                     </div>
 
@@ -1301,6 +1551,205 @@ function SignalPill({ label, value, positive }: { label: string; value: string; 
     <div className="rounded-lg border border-white/10 bg-black/25 px-3 py-2">
       <div className="text-[11px] text-zinc-500">{label}</div>
       <div className={`mt-1 truncate font-mono text-sm font-semibold ${color}`}>{value}</div>
+    </div>
+  )
+}
+
+function EarlyWalletFlowPanel({
+  flow,
+  language,
+  loading,
+  onLoad,
+  onStartIndex,
+  onExport,
+}: {
+  flow?: EarlyWalletFlowResponse
+  language: string
+  loading: boolean
+  onLoad: () => void
+  onStartIndex: () => void
+  onExport: () => void
+}) {
+  const summary = flow?.summary
+  const quote = flow?.quote_symbol || 'quote'
+  const direction = summary?.direction || 'insufficient_data'
+  const tone = getDealerTone(direction)
+
+  return (
+    <div className={`mb-4 rounded-lg border ${tone.border} bg-black/20 p-4`}>
+      <div className="flex flex-col gap-3 border-b border-white/10 pb-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="min-w-0">
+          <div className={`inline-flex items-center gap-2 rounded-md border ${tone.border} bg-white/[0.04] px-3 py-1 text-xs font-semibold ${tone.text}`}>
+            <Layers className="h-3.5 w-3.5" />
+            {language === 'zh' ? '前100早期地址资金流模型' : 'Top-100 Early Wallet Flow'}
+          </div>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <h3 className="text-xl font-semibold text-white">
+              {getDealerDirectionLabel(direction, language)}
+            </h3>
+            <span className="rounded-md border border-white/10 bg-white/[0.05] px-2.5 py-1 text-xs text-zinc-300">
+              {flow?.status || (language === 'zh' ? '未计算' : 'not_loaded')}
+            </span>
+            <span className="rounded-md border border-white/10 bg-white/[0.05] px-2.5 py-1 text-xs text-zinc-300">
+              {language === 'zh' ? '计价' : 'Quote'} {quote}
+            </span>
+          </div>
+          <p className="mt-2 max-w-4xl text-sm leading-6 text-zinc-300">
+            {flow
+              ? (language === 'zh'
+                ? `已追踪 ${summary?.seed_wallet_count || 0} 个初始地址、${summary?.tracked_wallet_count || 0} 个分层地址，最深 ${summary?.max_observed_depth || 0} 层。`
+                : `Tracked ${summary?.seed_wallet_count || 0} seed wallets and ${summary?.tracked_wallet_count || 0} layered wallets through depth ${summary?.max_observed_depth || 0}.`)
+              : (language === 'zh'
+                ? '基于 full-history 索引计算前100早期买家成本、转出衍生地址和已实现盈利。'
+                : 'Calculates early buyer cost basis, transfer descendants, and realized PnL from full-history indexed data.')}
+          </p>
+          {flow?.message && <p className="mt-2 text-sm text-amber-100">{flow.message}</p>}
+          {(summary?.incomplete_reasons || []).length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-2">
+              {summary?.incomplete_reasons?.map((reason) => (
+                <span key={reason} className="rounded bg-amber-300/10 px-2 py-1 text-xs text-amber-100">{reason}</span>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={onLoad}
+            disabled={loading}
+            className="inline-flex items-center gap-2 rounded-md bg-[#F0B90B] px-3 py-2 text-sm font-semibold text-black disabled:opacity-60"
+          >
+            <RefreshCcw className="h-4 w-4" />
+            {loading ? (language === 'zh' ? '计算中' : 'Calculating') : (language === 'zh' ? '计算模型' : 'Calculate')}
+          </button>
+          <button
+            type="button"
+            onClick={onStartIndex}
+            disabled={loading}
+            className="inline-flex items-center gap-2 rounded-md border border-cyan-300/25 bg-cyan-300/10 px-3 py-2 text-sm font-semibold text-cyan-100 disabled:opacity-60"
+          >
+            <GitBranch className="h-4 w-4" />
+            {language === 'zh' ? '启动索引' : 'Start index'}
+          </button>
+          <button
+            type="button"
+            onClick={onExport}
+            className="inline-flex items-center gap-2 rounded-md border border-white/10 bg-white/[0.05] px-3 py-2 text-sm font-semibold text-zinc-100"
+          >
+            <Download className="h-4 w-4" />
+            CSV
+          </button>
+        </div>
+      </div>
+
+      {summary ? (
+        <>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <MetricCard label={language === 'zh' ? '初始总成本' : 'Initial cost'} value={formatQuote(summary.total_initial_cost, quote)} />
+            <MetricCard label={language === 'zh' ? '卖出金额' : 'Sell value'} value={formatQuote(summary.total_sell_value, quote)} />
+            <MetricCard label={language === 'zh' ? '已实现盈利' : 'Realized PnL'} value={formatSignedQuote(summary.realized_pnl, quote)} />
+            <MetricCard label={language === 'zh' ? '剩余持仓' : 'Remaining'} value={formatTokenAmount(summary.remaining_amount)} />
+            <MetricCard label={language === 'zh' ? '自身卖出' : 'Seed own sells'} value={formatQuote(summary.seed_own_sell_value, quote)} />
+            <MetricCard label={language === 'zh' ? '衍生卖出' : 'Descendant sells'} value={formatQuote(summary.descendant_sell_value, quote)} />
+            <MetricCard label={language === 'zh' ? '转出数量' : 'Transferred out'} value={formatTokenAmount(summary.transfer_out_amount)} />
+            <MetricCard label={language === 'zh' ? '盈利率' : 'PnL %'} value={`${summary.realized_pnl_pct.toFixed(2)}%`} />
+            {summary.missing_swap_price_count > 0 && (
+              <MetricCard label={language === 'zh' ? '缺失单价' : 'Missing prices'} value={String(summary.missing_swap_price_count)} />
+            )}
+          </div>
+          <div className="mt-4 grid gap-4 xl:grid-cols-2">
+            <EarlySeedTable seeds={flow?.seeds || []} quote={quote} language={language} />
+            <EarlyWalletTable wallets={flow?.wallets || []} quote={quote} language={language} />
+          </div>
+        </>
+      ) : (
+        <div className="mt-4 rounded-lg border border-dashed border-white/10 bg-white/[0.03] p-6 text-center text-sm text-zinc-500">
+          {language === 'zh' ? '还没有计算早期地址资金流。点击“计算模型”开始。' : 'Early wallet flow has not been calculated yet. Click Calculate to start.'}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function EarlySeedTable({ seeds, quote, language }: { seeds: EarlyWalletSeed[]; quote: string; language: string }) {
+  return (
+    <div className="rounded-lg border border-white/10 bg-white/[0.035] p-4">
+      <h3 className="text-sm font-semibold text-white">{language === 'zh' ? '前100初始地址' : 'Top seed wallets'}</h3>
+      <div className="mt-3 max-h-[420px] overflow-auto">
+        <table className="w-full min-w-[760px] text-left text-xs">
+          <thead className="sticky top-0 bg-[#10141d] text-zinc-500">
+            <tr className="border-b border-white/10">
+              <th className="py-2 pr-3 font-medium">#</th>
+              <th className="py-2 pr-3 font-medium">Address</th>
+              <th className="py-2 pr-3 font-medium">{language === 'zh' ? '买入成本' : 'Cost'}</th>
+              <th className="py-2 pr-3 font-medium">{language === 'zh' ? '均价' : 'Avg'}</th>
+              <th className="py-2 pr-3 font-medium">{language === 'zh' ? '自身卖出' : 'Own sell'}</th>
+              <th className="py-2 pr-3 font-medium">{language === 'zh' ? '衍生盈利' : 'Desc PnL'}</th>
+              <th className="py-2 pr-3 font-medium">{language === 'zh' ? '剩余' : 'Remain'}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {seeds.slice(0, 100).map((seed) => (
+              <tr key={seed.address} className="border-b border-white/[0.06]">
+                <td className="py-2 pr-3 text-zinc-400">{seed.rank}</td>
+                <td className="py-2 pr-3 font-mono text-zinc-100">{shortenAddress(seed.address)}</td>
+                <td className="py-2 pr-3 font-mono text-zinc-100">{formatQuote(seed.buy_value, quote)}</td>
+                <td className="py-2 pr-3 font-mono text-zinc-300">{formatSmallNumber(seed.avg_buy_price)}</td>
+                <td className="py-2 pr-3 text-zinc-300">{formatQuote(seed.own_sell_value, quote)}</td>
+                <td className={`py-2 pr-3 font-mono ${seed.descendant_realized_pnl >= 0 ? 'text-emerald-200' : 'text-red-200'}`}>{formatSignedQuote(seed.descendant_realized_pnl, quote)}</td>
+                <td className="py-2 pr-3 text-zinc-300">{formatTokenAmount(seed.current_balance)}</td>
+              </tr>
+            ))}
+            {seeds.length === 0 && (
+              <tr><td colSpan={7} className="py-4 text-center text-zinc-500">No data</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+function EarlyWalletTable({ wallets, quote, language }: { wallets: EarlyWalletFlowWallet[]; quote: string; language: string }) {
+  const rows = wallets.slice(0, 120)
+  return (
+    <div className="rounded-lg border border-white/10 bg-white/[0.035] p-4">
+      <h3 className="text-sm font-semibold text-white">{language === 'zh' ? '分层地址明细' : 'Layered wallet details'}</h3>
+      <div className="mt-3 max-h-[420px] overflow-auto">
+        <table className="w-full min-w-[920px] text-left text-xs">
+          <thead className="sticky top-0 bg-[#10141d] text-zinc-500">
+            <tr className="border-b border-white/10">
+              <th className="py-2 pr-3 font-medium">Depth</th>
+              <th className="py-2 pr-3 font-medium">Address</th>
+              <th className="py-2 pr-3 font-medium">Root</th>
+              <th className="py-2 pr-3 font-medium">Buy/Sell</th>
+              <th className="py-2 pr-3 font-medium">{language === 'zh' ? '转入/转出' : 'In/Out'}</th>
+              <th className="py-2 pr-3 font-medium">{language === 'zh' ? '卖出金额' : 'Sell value'}</th>
+              <th className="py-2 pr-3 font-medium">PnL</th>
+              <th className="py-2 pr-3 font-medium">{language === 'zh' ? '持仓' : 'Balance'}</th>
+              <th className="py-2 pr-3 font-medium">{language === 'zh' ? '缺价' : 'No price'}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((wallet) => (
+              <tr key={`${wallet.depth}-${wallet.address}-${wallet.root_address}`} className="border-b border-white/[0.06]">
+                <td className="py-2 pr-3 text-zinc-400">{wallet.depth}</td>
+                <td className="py-2 pr-3 font-mono text-zinc-100">{shortenAddress(wallet.address)}</td>
+                <td className="py-2 pr-3 font-mono text-zinc-400">{wallet.root_address ? shortenAddress(wallet.root_address) : '-'}</td>
+                <td className="py-2 pr-3 text-zinc-300">{formatTokenAmount(wallet.buy_amount)}/{formatTokenAmount(wallet.sell_amount)}</td>
+                <td className="py-2 pr-3 text-zinc-300">{formatTokenAmount(wallet.transfer_in_amount)}/{formatTokenAmount(wallet.transfer_out_amount)}</td>
+                <td className="py-2 pr-3 text-zinc-300">{formatQuote(wallet.sell_value, quote)}</td>
+                <td className={`py-2 pr-3 font-mono ${wallet.realized_pnl >= 0 ? 'text-emerald-200' : 'text-red-200'}`}>{formatSignedQuote(wallet.realized_pnl, quote)}</td>
+                <td className="py-2 pr-3 text-zinc-300">{formatTokenAmount(wallet.current_balance)}</td>
+                <td className="py-2 pr-3 text-zinc-400">{wallet.incomplete_pricing || '-'}</td>
+              </tr>
+            ))}
+            {rows.length === 0 && (
+              <tr><td colSpan={9} className="py-4 text-center text-zinc-500">No data</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   )
 }
@@ -1735,15 +2184,9 @@ function WalletGraphWindow({
   onRefresh: () => void
 }) {
   const graph = token.walletGraph
+  const earlyFlow = token.earlyWalletFlow || token.analysis?.early_wallet_flow
   const title = token.analysis?.token?.symbol || token.label || shortenAddress(token.address)
-  const graphData = useMemo(() => ({
-    nodes: (graph?.nodes || []) as ForceGraphNode[],
-    links: (graph?.edges || []).map((edge) => ({
-      ...edge,
-      source: edge.source,
-      target: edge.target,
-    })) as ForceGraphLink[],
-  }), [graph])
+  const graphData = useMemo(() => buildDisplayedGraphData(graph, earlyFlow), [graph, earlyFlow])
 
   const nodeColor = (node: ForceGraphNode) => {
     switch (node.node_type) {
@@ -1759,6 +2202,10 @@ function WalletGraphWindow({
         return '#a78bfa'
       case 'top_holder':
         return '#fbbf24'
+      case 'early_seed':
+        return '#fb923c'
+      case 'early_descendant':
+        return '#c084fc'
       case 'owner':
       case 'creator':
         return '#fb7185'
@@ -1867,8 +2314,8 @@ function WalletGraphWindow({
             <div className="mt-4 grid grid-cols-2 gap-2">
               <Metric label={language === 'zh' ? '节点' : 'Nodes'} value={String(graphData.nodes.length)} />
               <Metric label={language === 'zh' ? '关系' : 'Edges'} value={String(graphData.links.length)} />
-              <Metric label={language === 'zh' ? '深度' : 'Depth'} value={graph?.depth || token.depth} />
-              <Metric label={language === 'zh' ? '状态' : 'Status'} value={graph?.status || '-'} />
+              <Metric label={language === 'zh' ? '深度' : 'Depth'} value={String(earlyFlow?.summary?.max_observed_depth ?? graph?.depth ?? token.depth)} />
+              <Metric label={language === 'zh' ? '状态' : 'Status'} value={earlyFlow?.status || graph?.status || '-'} />
             </div>
 
             <div className="mt-4 space-y-2">
@@ -1877,6 +2324,8 @@ function WalletGraphWindow({
               <GraphLegend color="#34d399" label={language === 'zh' ? '疑似进货钱包' : 'Accumulator'} />
               <GraphLegend color="#f87171" label={language === 'zh' ? '疑似出货钱包' : 'Seller'} />
               <GraphLegend color="#a78bfa" label={language === 'zh' ? '关联/套利钱包' : 'Related'} />
+              <GraphLegend color="#fb923c" label={language === 'zh' ? '早期初始地址' : 'Early seed'} />
+              <GraphLegend color="#c084fc" label={language === 'zh' ? '衍生地址' : 'Descendant'} />
               <GraphLegend color="#fbbf24" label="Top holder" />
               <GraphLegend color="#fb7185" label="Owner / Creator" />
             </div>
@@ -1894,6 +2343,72 @@ function GraphLegend({ color, label }: { color: string; label: string }) {
       {label}
     </div>
   )
+}
+
+function buildDisplayedGraphData(graph: WalletGraphResponse | undefined, earlyFlow: EarlyWalletFlowResponse | undefined) {
+  if (earlyFlow?.wallets && earlyFlow.wallets.length > 0) {
+    const nodes: ForceGraphNode[] = [
+      {
+        id: `token:${earlyFlow.address}`,
+        label: earlyFlow.token?.symbol || shortenAddress(earlyFlow.address),
+        node_type: 'token',
+        address: earlyFlow.address,
+        value: Math.max(earlyFlow.summary.total_initial_cost || 1, 1),
+      },
+    ]
+    for (const wallet of earlyFlow.wallets.slice(0, 160)) {
+      nodes.push({
+        id: `early:${wallet.address}`,
+        label: shortenAddress(wallet.address),
+        node_type: wallet.is_seed ? 'early_seed' : 'early_descendant',
+        address: wallet.address,
+        wallet_type: wallet.is_seed ? 'seed' : `depth_${wallet.depth}`,
+        value: Math.max(Math.abs(wallet.allocated_cost) + Math.abs(wallet.realized_pnl) + Math.abs(wallet.current_balance), 1),
+        buy_count: wallet.buy_count,
+        sell_count: wallet.sell_count,
+        buy_amount: wallet.buy_amount,
+        sell_amount: wallet.sell_amount,
+        net_bought_amount: wallet.current_balance,
+        first_buy_at: wallet.first_seen_at,
+      })
+    }
+    const nodeIDs = new Set(nodes.map((node) => node.id))
+    const links: ForceGraphLink[] = []
+    for (const seed of earlyFlow.seeds || []) {
+      const target = `early:${seed.address}`
+      if (nodeIDs.has(target)) {
+        links.push({
+          source: `token:${earlyFlow.address}`,
+          target,
+          relation: 'early_seed',
+          amount: seed.buy_amount,
+          weight: Math.max(Math.log10(Math.abs(seed.buy_value) + 10), 1),
+        })
+      }
+    }
+    for (const edge of earlyFlow.edges || []) {
+      const source = `early:${edge.source}`
+      const target = `early:${edge.target}`
+      if (!nodeIDs.has(source) || !nodeIDs.has(target)) continue
+      links.push({
+        source,
+        target,
+        relation: 'transfer',
+        amount: edge.amount,
+        weight: Math.max(Math.log10(Math.abs(edge.amount) + 10), 1),
+        tx_hash: edge.tx_hash,
+      })
+    }
+    return { nodes, links }
+  }
+  return {
+    nodes: (graph?.nodes || []) as ForceGraphNode[],
+    links: (graph?.edges || []).map((edge) => ({
+      ...edge,
+      source: edge.source,
+      target: edge.target,
+    })) as ForceGraphLink[],
+  }
 }
 
 function graphNodeLabel(node: ForceGraphNode, language: string): string {
@@ -1936,6 +2451,18 @@ function mergeAnalysisWithWalletGraph(
     dealer_flow: graph.dealer_flow,
     token: analysis.token || graph.token,
     status: analysis.status || graph.status,
+  }
+}
+
+function mergeAnalysisWithEarlyWalletFlow(
+  analysis: TokenAnalysis | undefined,
+  flow: EarlyWalletFlowResponse | undefined,
+): TokenAnalysis | undefined {
+  if (!analysis || !flow) return analysis
+  return {
+    ...analysis,
+    early_wallet_flow: flow,
+    token: analysis.token || flow.token,
   }
 }
 
@@ -2073,4 +2600,21 @@ function formatUSDT(value: number): string {
   if (abs >= 1_000_000) return `${(value / 1_000_000).toFixed(2)}M`
   if (abs >= 1_000) return `${(value / 1_000).toFixed(2)}K`
   return value.toFixed(2)
+}
+
+function formatQuote(value: number, quote: string): string {
+  return `${formatUSDT(value)} ${quote}`
+}
+
+function formatSignedQuote(value: number, quote: string): string {
+  const prefix = value > 0 ? '+' : ''
+  return `${prefix}${formatUSDT(value)} ${quote}`
+}
+
+function formatSmallNumber(value: number): string {
+  if (!Number.isFinite(value)) return '-'
+  const abs = Math.abs(value)
+  if (abs > 0 && abs < 0.000001) return value.toExponential(2)
+  if (abs < 0.01) return value.toFixed(8).replace(/0+$/, '').replace(/\.$/, '')
+  return value.toFixed(6).replace(/0+$/, '').replace(/\.$/, '')
 }
