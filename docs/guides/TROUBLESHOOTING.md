@@ -53,7 +53,7 @@ Before reporting a bug, please check:
 
 #### ❌ Leverage Error: `Subaccounts restricted to 5x leverage`
 
-**Symptom:** Orders fail with leverage error when trying to use >5x leverage.
+**Symptom:** Orders fail with leverage error when trying to use leverage above the account, symbol, or notional bracket limit.
 
 **Solution:**
 1. Open Web UI → Trader Settings
@@ -64,7 +64,7 @@ Before reporting a bug, please check:
      "altcoin_leverage": 5
    }
    ```
-3. Or use main account (supports up to 50x BTC/ETH, 20x altcoins)
+3. Or use an account/symbol bracket that supports the target leverage. Binance USD-M Futures API accepts 1-125x, but the actual maximum can be lower per symbol and notional bracket.
 
 ---
 

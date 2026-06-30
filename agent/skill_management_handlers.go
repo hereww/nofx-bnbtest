@@ -818,7 +818,7 @@ func strategyCreateFieldInlineHint(lang, field string) string {
 		case "selected_timeframes":
 			return "Multi-timeframes: up to 4, e.g. 5m,15m,1h"
 		case "btceth_max_leverage", "altcoin_max_leverage":
-			return strategyCreateFieldDisplayName(lang, field) + ": 1-20"
+			return strategyCreateFieldDisplayName(lang, field) + ": 1-125"
 		case "min_confidence":
 			return "Minimum confidence: 50-100"
 		case "min_risk_reward_ratio":
@@ -834,7 +834,7 @@ func strategyCreateFieldInlineHint(lang, field string) string {
 		case "total_investment":
 			return "Total investment: user's capital/margin budget, minimum 100 USDT; not leveraged notional exposure"
 		case "leverage":
-			return "Grid leverage: 1-5"
+			return "Grid leverage: 1-125"
 		case "distribution":
 			return "Distribution: uniform / gaussian / pyramid"
 		case "max_drawdown_pct":
@@ -858,9 +858,9 @@ func strategyCreateFieldInlineHint(lang, field string) string {
 	case "selected_timeframes":
 		return "多周期时间框架：最多 4 个，例如 5m,15m,1h"
 	case "btceth_max_leverage":
-		return "BTC/ETH 最大杠杆：1～20 倍"
+		return "BTC/ETH 最大杠杆：1～125 倍"
 	case "altcoin_max_leverage":
-		return "山寨币最大杠杆：1～20 倍"
+		return "山寨币最大杠杆：1～125 倍"
 	case "min_confidence":
 		return "最低置信度：50～100，越高越谨慎"
 	case "min_risk_reward_ratio":
@@ -876,7 +876,7 @@ func strategyCreateFieldInlineHint(lang, field string) string {
 	case "total_investment":
 		return "总投入：用户实际投入/保证金预算，最低 100 USDT；不是杠杆后的名义仓位"
 	case "leverage":
-		return "杠杆：1～5 倍"
+		return "杠杆：1～125 倍"
 	case "distribution":
 		return "网格分布：uniform（均匀）/ gaussian（正态）/ pyramid（金字塔）"
 	case "max_drawdown_pct":
@@ -920,7 +920,7 @@ func formatStrategyCreateFieldOptionsReply(lang, text, missingKind string) strin
 	case "selected_timeframes":
 		return "多周期最多选 4 个，可选：1m、3m、5m、15m、30m、1h、2h、4h、6h、8h、12h、1d、3d、1w。常见组合比如 5m,15m,1h。"
 	case "btceth_max_leverage", "altcoin_max_leverage":
-		return strategyCreateFieldDisplayName(lang, field) + "范围是 1～20 倍。数值越高风险越大。"
+		return strategyCreateFieldDisplayName(lang, field) + "范围是 1～125 倍。数值越高风险越大，实际可用上限仍受交易所交易对和名义仓位档位限制。"
 	case "min_confidence":
 		return "最低置信度范围是 50～100。数值越高越谨慎，开单会更少。"
 	case "min_risk_reward_ratio":
@@ -936,7 +936,7 @@ func formatStrategyCreateFieldOptionsReply(lang, text, missingKind string) strin
 	case "total_investment":
 		return "网格总投入是用户实际投入/保证金预算，不是杠杆后的名义仓位；最小 100 USDT，按 100 USDT 步进。"
 	case "leverage":
-		return "网格杠杆范围是 1～5 倍。稳健一般用 1 倍。"
+		return "网格杠杆范围是 1～125 倍。稳健一般用 1～5 倍；实际可用上限仍受交易所交易对和名义仓位档位限制。"
 	case "distribution":
 		return "网格分布可选：uniform（均匀）、gaussian（正态）、pyramid（金字塔）。"
 	case "max_drawdown_pct":

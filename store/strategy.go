@@ -18,8 +18,11 @@ const (
 	MinKlineCount     = 10
 	MaxKlineCount     = 30
 	MinLeverage       = 1
-	MaxBTCETHLeverage = 20
-	MaxAltLeverage    = 20
+	// Binance USD-M Futures /fapi/v1/leverage accepts 1-125.
+	// Actual max leverage can be lower for a symbol/notional bracket.
+	MaxBTCETHLeverage = 125
+	MaxAltLeverage    = 125
+	MaxGridLeverage   = 125
 	MinPositionRatio  = 0.5
 	MaxPositionRatio  = 10.0
 	MinRiskReward     = 1.0
@@ -88,6 +91,14 @@ func (c *StrategyConfig) ClampLimits() {
 	}
 	if c.RiskControl.AltcoinMaxLeverage > MaxAltLeverage {
 		c.RiskControl.AltcoinMaxLeverage = MaxAltLeverage
+	}
+	if c.GridConfig != nil {
+		if c.GridConfig.Leverage < MinLeverage {
+			c.GridConfig.Leverage = MinLeverage
+		}
+		if c.GridConfig.Leverage > MaxGridLeverage {
+			c.GridConfig.Leverage = MaxGridLeverage
+		}
 	}
 
 	// Clamp position value ratio limits.
@@ -653,7 +664,7 @@ type GridStrategyConfig struct {
 	GridCount int `json:"grid_count"`
 	// Total investment in USDT
 	TotalInvestment float64 `json:"total_investment"`
-	// Leverage (1-20)
+	// Leverage (1-125; actual exchange bracket can be lower)
 	Leverage int `json:"leverage"`
 	// Upper price boundary (0 = auto-calculate from ATR)
 	UpperPrice float64 `json:"upper_price"`

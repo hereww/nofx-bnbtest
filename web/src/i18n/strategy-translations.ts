@@ -56,7 +56,7 @@ export const gridConfig = {
   totalInvestment: { zh: '投资金额 (USDT)', en: 'Investment (USDT)', es: 'Inversión (USDT)' },
   totalInvestmentDesc: { zh: '网格策略的总投资金额', en: 'Total investment for grid strategy', es: 'Inversión total' },
   leverage: { zh: '杠杆倍数', en: 'Leverage', es: 'Apalancamiento' },
-  leverageDesc: { zh: '交易使用的杠杆倍数 (1-5)', en: 'Leverage for trading (1-5)', es: 'Apalancamiento (1-5)' },
+  leverageDesc: { zh: '交易使用的杠杆倍数 (1-125，实际上限受交易所档位限制)', en: 'Leverage for trading (1-125; actual exchange bracket may be lower)', es: 'Apalancamiento (1-125; el límite real del exchange puede ser menor)' },
   gridCount: { zh: '网格数量', en: 'Grid Count', es: 'Cantidad de Grids' },
   gridCountDesc: { zh: '网格层级数量 (5-50)', en: 'Number of grid levels (5-50)', es: 'Niveles (5-50)' },
   distribution: { zh: '资金分配方式', en: 'Distribution', es: 'Distribución' },

@@ -139,7 +139,7 @@ func buildSkillDomainPrimerForSession(lang string, session skillSession) string 
 				"- config_patch 必须使用产品 schema 原值，不要使用展示文案：strategy_type=ai_trading；source_type 只能是 static、ai500、oi_top、oi_low；没有 mixed/混合模式。",
 				"- 时间周期必须输出为产品枚举字符串，例如 1m、3m、5m、15m、1h；selected_timeframes 必须是字符串数组，例如 [\"1m\",\"5m\",\"15m\"]，不要输出 JSON 字符串。",
 				"- AI500/OI Top/OI Low 选币数量范围 1～10；static_coins 最多 10 个；selected_timeframes 最多 4 个；primary_count 10～30。",
-				"- BTC/ETH 最大杠杆 1～20；山寨币最大杠杆 1～20；min_confidence 50～100；min_risk_reward_ratio 1～10。",
+				"- BTC/ETH 最大杠杆 1～125；山寨币最大杠杆 1～125；min_confidence 50～100；min_risk_reward_ratio 1～10。实际可用杠杆仍受交易所交易对和名义仓位档位限制。",
 				"- AI 策略创建方案不要展示或询问非 AI 模板字段：投入金额、每笔固定投入、止损、日亏损限制、最大回撤、网格字段。",
 			}, "\n")
 		case "grid_trading":
@@ -147,7 +147,7 @@ func buildSkillDomainPrimerForSession(lang string, session skillSession) string 
 				"### 网格策略模板",
 				"- 只使用 grid_trading 模板：strategy_type + grid_config + publish_config；config_patch 必须使用产品 schema 原值，strategy_type=grid_trading。",
 				"- 交易对选项：BTCUSDT、ETHUSDT、SOLUSDT、BNBUSDT、XRPUSDT、DOGEUSDT。",
-				"- grid_count 5～50；total_investment 最小 100；leverage 1～5；atr_multiplier 1～5。",
+				"- grid_count 5～50；total_investment 最小 100；leverage 1～125；atr_multiplier 1～5。实际可用杠杆仍受交易所交易对和名义仓位档位限制。",
 				"- total_investment 是用户实际投入/保证金预算，不是杠杆后的名义仓位；最大名义仓位约等于 total_investment × leverage。用户说“投入/总投入/本金/保证金”时默认映射到 total_investment。",
 				"- max_drawdown_pct 5～50；stop_loss_pct 1～20；daily_loss_limit_pct 1～30；direction_bias_ratio 0.55～0.90。",
 				"- 没有实时行情工具结果时，不要猜当前价格或手动价格上下界；推荐 use_atr_bounds=true 的 ATR 自动边界。",
@@ -163,7 +163,7 @@ func buildSkillDomainPrimerForSession(lang string, session skillSession) string 
 			"- config_patch must use product schema raw values, not display labels: strategy_type=ai_trading; source_type is only static, ai500, oi_top, or oi_low; no mixed mode.",
 			"- Timeframes must be product enum strings such as 1m, 3m, 5m, 15m, 1h; selected_timeframes must be a JSON string array such as [\"1m\",\"5m\",\"15m\"], not a JSON-encoded string.",
 			"- AI500/OI source counts 1-10; static_coins at most 10; selected_timeframes at most 4; primary_count 10-30.",
-			"- BTC/ETH leverage 1-20; altcoin leverage 1-20; min_confidence 50-100; min_risk_reward_ratio 1-10.",
+			"- BTC/ETH leverage 1-125; altcoin leverage 1-125; min_confidence 50-100; min_risk_reward_ratio 1-10. Actual usable leverage can still be lower for the exchange symbol/notional bracket.",
 			"- Do not show or ask for non-AI-template fields in AI strategy drafts: investment amount, fixed per-trade amount, stop loss, daily loss limit, max drawdown, or grid fields.",
 		}, "\n")
 	case "grid_trading":
@@ -171,7 +171,7 @@ func buildSkillDomainPrimerForSession(lang string, session skillSession) string 
 			"### Grid Strategy Template",
 			"- Use only grid_trading: strategy_type + grid_config + publish_config; config_patch must use product schema raw values with strategy_type=grid_trading.",
 			"- Symbol options: BTCUSDT, ETHUSDT, SOLUSDT, BNBUSDT, XRPUSDT, DOGEUSDT.",
-			"- grid_count 5-50; total_investment >=100; leverage 1-5; atr_multiplier 1-5.",
+			"- grid_count 5-50; total_investment >=100; leverage 1-125; atr_multiplier 1-5. Actual usable leverage can still be lower for the exchange symbol/notional bracket.",
 			"- total_investment is the user's actual capital/margin budget, not leveraged notional exposure; maximum notional exposure is approximately total_investment * leverage. When the user says investment, capital, amount to put in, or margin, map it to total_investment by default.",
 			"- max_drawdown_pct 5-50; stop_loss_pct 1-20; daily_loss_limit_pct 1-30; direction_bias_ratio 0.55-0.90.",
 			"- Without fresh market data, do not guess the current price or manual upper/lower prices; recommend ATR auto bounds with use_atr_bounds=true.",

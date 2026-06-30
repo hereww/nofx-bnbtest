@@ -126,7 +126,7 @@ export function GridConfigEditor({
               onChange={(e) => updateField('leverage', parseInt(e.target.value) || 5)}
               disabled={disabled}
               min={1}
-              max={5}
+              max={125}
               className="w-full px-3 py-2 rounded"
               style={inputStyle}
             />

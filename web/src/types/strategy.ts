@@ -78,7 +78,7 @@ export interface GridStrategyConfig {
   grid_count: number;
   // Total investment in USDT
   total_investment: number;
-  // Leverage (1-20)
+  // Leverage (1-125; actual exchange bracket can be lower)
   leverage: number;
   // Upper price boundary (0 = auto-calculate from ATR)
   upper_price: number;

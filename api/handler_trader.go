@@ -15,8 +15,10 @@ import (
 )
 
 const (
-	maxManualBTCETHLeverage = 20
-	maxManualAltLeverage    = 20
+	// Binance USD-M Futures Change Initial Leverage accepts 1-125.
+	// The exchange may still apply lower per-symbol/per-notional bracket limits.
+	maxManualBTCETHLeverage = 125
+	maxManualAltLeverage    = 125
 )
 
 // AI trader management related structures
@@ -72,10 +74,10 @@ func traderCreationRequestError(reason string) string {
 
 func validateTraderLeverageRange(btcEthLeverage, altcoinLeverage int) (string, string) {
 	if btcEthLeverage < 0 || btcEthLeverage > maxManualBTCETHLeverage {
-		return traderCreationRequestError("BTC/ETH 杠杆倍数需要在 1 到 20 倍之间"), "trader.create.invalid_btc_eth_leverage"
+		return traderCreationRequestError("BTC/ETH 杠杆倍数需要在 1 到 125 倍之间；实际可用上限仍受交易所交易对和名义仓位档位限制"), "trader.create.invalid_btc_eth_leverage"
 	}
 	if altcoinLeverage < 0 || altcoinLeverage > maxManualAltLeverage {
-		return traderCreationRequestError("山寨币杠杆倍数需要在 1 到 20 倍之间"), "trader.create.invalid_altcoin_leverage"
+		return traderCreationRequestError("山寨币杠杆倍数需要在 1 到 125 倍之间；实际可用上限仍受交易所交易对和名义仓位档位限制"), "trader.create.invalid_altcoin_leverage"
 	}
 	return "", ""
 }

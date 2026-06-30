@@ -83,7 +83,7 @@ export function RiskControlEditor({
                 }
                 disabled={disabled}
                 min={1}
-                max={20}
+                max={125}
                 className="flex-1 accent-yellow-500"
               />
               <span
@@ -114,7 +114,7 @@ export function RiskControlEditor({
                 }
                 disabled={disabled}
                 min={1}
-                max={20}
+                max={125}
                 className="flex-1 accent-yellow-500"
               />
               <span

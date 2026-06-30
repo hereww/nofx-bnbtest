@@ -450,6 +450,56 @@ func TestBinanceRateLimitCooldownBlocksBalanceRequest(t *testing.T) {
 	assert.Equal(t, int32(0), hits.Load())
 }
 
+func TestBinanceUsedWeightHeaderTriggersCooldown(t *testing.T) {
+	resetBinanceRateLimitForTest()
+	defer resetBinanceRateLimitForTest()
+	t.Setenv("BINANCE_USED_WEIGHT_1M_SOFT_LIMIT", "10")
+	t.Setenv("BINANCE_USED_WEIGHT_1M_HARD_LIMIT", "20")
+
+	var hits atomic.Int32
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+		if r.URL.Path != "/fapi/v2/account" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("X-MBX-USED-WEIGHT-1M", "25")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"totalWalletBalance":          "100.00",
+			"availableBalance":            "95.00",
+			"totalUnrealizedProfit":       "5.00",
+			"totalInitialMargin":          "0",
+			"totalMaintMargin":            "0",
+			"totalMarginBalance":          "100.00",
+			"totalPositionInitialMargin":  "0",
+			"totalOpenOrderInitialMargin": "0",
+			"totalCrossWalletBalance":     "100.00",
+			"totalCrossUnPnl":             "0",
+			"maxWithdrawAmount":           "95.00",
+			"assets":                      []interface{}{},
+			"positions":                   []interface{}{},
+		})
+	}))
+	defer mockServer.Close()
+
+	client := futures.NewClient("test_api_key", "test_secret_key")
+	client.BaseURL = mockServer.URL
+	client.HTTPClient = mockServer.Client()
+	installBinanceRateLimitTransport(&client.HTTPClient)
+	traderInstance := &FuturesTrader{
+		client:        client,
+		cacheDuration: 0,
+	}
+
+	_, err := traderInstance.GetBalance()
+	assert.NoError(t, err)
+
+	_, err = traderInstance.GetBalance()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "used weight 1m is high")
+	assert.Equal(t, int32(1), hits.Load())
+}
+
 func TestSyncBinanceServerTimeUsesLowestRTTSample(t *testing.T) {
 	nowMs := time.Now().UnixMilli()
 	var calls atomic.Int32

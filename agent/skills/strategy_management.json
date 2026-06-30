@@ -68,14 +68,14 @@
     "btceth_max_leverage": {
       "type": "int",
       "min": 1,
-      "max": 20,
-      "description": "BTC/ETH 最大杠杆倍数，范围 1～20。"
+      "max": 125,
+      "description": "BTC/ETH 最大杠杆倍数，范围 1～125；实际可用上限受交易所交易对和名义仓位档位限制。"
     },
     "altcoin_max_leverage": {
       "type": "int",
       "min": 1,
-      "max": 20,
-      "description": "山寨币最大杠杆倍数，范围 1～20。"
+      "max": 125,
+      "description": "山寨币最大杠杆倍数，范围 1～125；实际可用上限受交易所交易对和名义仓位档位限制。"
     },
     "min_confidence": {
       "type": "int",
@@ -123,8 +123,8 @@
     "leverage": {
       "type": "int",
       "min": 1,
-      "max": 5,
-      "description": "网格策略杠杆倍数，手动页面当前范围 1～5。"
+      "max": 125,
+      "description": "网格策略杠杆倍数，范围 1～125；实际可用上限受交易所交易对和名义仓位档位限制。"
     },
     "upper_price": {
       "type": "float",
@@ -367,7 +367,7 @@
       "goal": "更新一个已有策略模板的指定配置，而不覆盖未提及字段。",
       "dynamic_rules": [
         "只更新用户明确提到的字段，不要覆盖未提及的字段。",
-        "杠杆超出 1～20 范围时，自动收敛并告知用户。",
+        "杠杆超出 1～125 范围时，自动收敛并告知用户。",
         "grid_trading 类型时，lower_price 必须小于 upper_price。"
       ],
       "success_output": "返回 strategy_id 和更新后的策略摘要。",
