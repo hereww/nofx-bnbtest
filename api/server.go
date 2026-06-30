@@ -301,8 +301,8 @@ StrategyConfig fields:
   indicators.enable_netflow_ranking: ALWAYS true, netflow_ranking_duration:"1h", netflow_ranking_limit:10
   indicators.enable_price_ranking: ALWAYS true, price_ranking_duration:"1h,4h,24h", price_ranking_limit:10
   risk_control.max_positions: max simultaneous positions (1=single coin, 3=diversified, 5=wide)
-  risk_control.btc_eth_max_leverage: BTC/ETH leverage (conservative:3-5, moderate:5-10, aggressive:10-20)
-  risk_control.altcoin_max_leverage: altcoin leverage (usually lower than BTC leverage)
+  risk_control.btc_eth_max_leverage: BTC/ETH leverage (conservative:3-5, moderate:5-10, aggressive:10-20; Binance API accepts up to 125 subject to symbol/notional brackets)
+  risk_control.altcoin_max_leverage: altcoin leverage (usually lower than BTC leverage; Binance API accepts up to 125 subject to symbol/notional brackets)
   risk_control.btc_eth_max_position_value_ratio: max position size as multiple of equity (default 5)
   risk_control.altcoin_max_position_value_ratio: default 1
   risk_control.max_margin_usage: 0.5-0.95 (default 0.9 = use up to 90% margin)

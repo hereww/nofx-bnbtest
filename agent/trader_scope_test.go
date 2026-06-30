@@ -285,7 +285,7 @@ func TestStrategyDomainPrimerKeepsSourceCountsWithinEditorBounds(t *testing.T) {
 	for _, want := range []string{
 		"AI500/OI Top/OI Low 选币数量范围 1～10",
 		"没有 mixed/混合模式",
-		"BTC/ETH 最大杠杆 1～20",
+		"BTC/ETH 最大杠杆 1～125",
 		"min_confidence 50～100",
 	} {
 		if !strings.Contains(primer, want) {
@@ -1621,7 +1621,7 @@ func TestStrategyCreateOptionsQuestionExplainsCurrentMissingField(t *testing.T) 
 
 func TestStrategyCreateMissingFieldsIncludeInlineOptions(t *testing.T) {
 	reply := formatStrategyCreateConfigNeeded("zh", "source_type,primary_timeframe,btceth_max_leverage,min_confidence,trading_frequency")
-	for _, want := range []string{"AI500", "OI Top", "OI Low", "静态币种", "1m", "1h", "1～20", "50～100", "每天最多"} {
+	for _, want := range []string{"AI500", "OI Top", "OI Low", "静态币种", "1m", "1h", "1～125", "50～100", "每天最多"} {
 		if !strings.Contains(reply, want) {
 			t.Fatalf("expected missing-field prompt to include option/range %q, got: %s", want, reply)
 		}

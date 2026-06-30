@@ -344,8 +344,8 @@ func strategyConfigSchema() map[string]any {
 					"risk_control": map[string]any{
 						"type": "object",
 						"properties": map[string]any{
-							"btc_eth_max_leverage":  map[string]any{"type": "number", "minimum": 1, "maximum": 20},
-							"altcoin_max_leverage":  map[string]any{"type": "number", "minimum": 1, "maximum": 20},
+							"btc_eth_max_leverage":  map[string]any{"type": "number", "minimum": 1, "maximum": 125},
+							"altcoin_max_leverage":  map[string]any{"type": "number", "minimum": 1, "maximum": 125},
 							"min_risk_reward_ratio": map[string]any{"type": "number", "minimum": 1, "maximum": 10, "description": "Manual page range 1-10, step 0.5."},
 							"min_confidence":        map[string]any{"type": "number", "minimum": 50, "maximum": 100, "description": "Manual page range 50-100."},
 						},
@@ -368,7 +368,7 @@ func strategyConfigSchema() map[string]any {
 					"symbol":                  map[string]any{"type": "string", "enum": []string{"BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT", "DOGEUSDT"}, "description": "Manual page dropdown options for grid trading symbols."},
 					"grid_count":              map[string]any{"type": "number", "minimum": 5, "maximum": 50, "description": "Manual page range 5-50."},
 					"total_investment":        map[string]any{"type": "number", "minimum": 100, "description": "User's actual capital/margin budget for the grid strategy, not leveraged notional exposure. Minimum 100 USDT."},
-					"leverage":                map[string]any{"type": "number", "minimum": 1, "maximum": 5, "description": "Manual page range 1-5."},
+					"leverage":                map[string]any{"type": "number", "minimum": 1, "maximum": 125, "description": "Manual page range 1-125; actual exchange bracket may be lower."},
 					"upper_price":             map[string]any{"type": "number"},
 					"lower_price":             map[string]any{"type": "number"},
 					"use_atr_bounds":          map[string]any{"type": "boolean"},

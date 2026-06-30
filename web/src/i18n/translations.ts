@@ -342,8 +342,8 @@ export const translations = {
     confirmSelection: 'Confirm',
     tradingSymbolsDescription:
       'Empty = use default symbols. Must end with USDT (e.g., BTCUSDT, ETHUSDT)',
-    btcEthLeverageValidation: 'BTC/ETH leverage must be between 1-50x',
-    altcoinLeverageValidation: 'Altcoin leverage must be between 1-20x',
+    btcEthLeverageValidation: 'BTC/ETH leverage must be between 1-125x',
+    altcoinLeverageValidation: 'Altcoin leverage must be between 1-125x',
     invalidSymbolFormat: 'Invalid symbol format: {symbol}, must end with USDT',
 
     // System Prompt Templates
@@ -767,7 +767,7 @@ export const translations = {
 
     faqLeverageSettings: 'How do leverage settings work?',
     faqLeverageSettingsAnswer:
-      'Leverage is set in Strategy → Risk Controls: BTC/ETH leverage (typically 5-20x) and Altcoin leverage (typically 3-10x). Higher leverage = higher risk and potential returns. Subaccounts may have restrictions (e.g., Binance subaccounts limited to 5x). The AI respects these limits when placing orders.',
+      'Leverage is set in Strategy → Risk Controls. Binance USD-M Futures accepts 1-125x where the symbol/notional bracket allows it, but practical strategies usually stay much lower (for example BTC/ETH 5-20x, altcoins 3-10x). Higher leverage = higher risk and potential returns. The AI respects these configured limits when placing orders.',
 
     faqStopLossTakeProfit: 'Does NOFX support stop-loss and take-profit?',
     faqStopLossTakeProfitAnswer:
@@ -1708,8 +1708,8 @@ export const translations = {
     confirmSelection: '确认选择',
     tradingSymbolsDescription:
       '留空 = 使用默认币种。必须以USDT结尾（如：BTCUSDT, ETHUSDT）',
-    btcEthLeverageValidation: 'BTC/ETH杠杆必须在1-50倍之间',
-    altcoinLeverageValidation: '山寨币杠杆必须在1-20倍之间',
+    btcEthLeverageValidation: 'BTC/ETH杠杆必须在1-125倍之间',
+    altcoinLeverageValidation: '山寨币杠杆必须在1-125倍之间',
     invalidSymbolFormat: '无效的币种格式：{symbol}，必须以USDT结尾',
 
     // System Prompt Templates
@@ -2102,7 +2102,7 @@ export const translations = {
 
     faqLeverageSettings: '杠杆设置如何工作？',
     faqLeverageSettingsAnswer:
-      '杠杆在策略 → 风控中设置：BTC/ETH 杠杆（通常 5-20 倍）和山寨币杠杆（通常 3-10 倍）。更高杠杆 = 更高风险和潜在收益。子账户可能有限制（如币安子账户限制 5 倍）。AI 下单时会遵守这些限制。',
+      '杠杆在策略 → 风控中设置。Binance USD-M Futures 在交易对和名义仓位档位允许时接受 1-125 倍，但实盘策略通常会低很多（例如 BTC/ETH 5-20 倍、山寨币 3-10 倍）。更高杠杆 = 更高风险和潜在收益。AI 下单时会遵守这些配置限制。',
 
     faqStopLossTakeProfit: 'NOFX 支持止损止盈吗？',
     faqStopLossTakeProfitAnswer:
@@ -3006,8 +3006,8 @@ export const translations = {
     clearSelection: 'Hapus Semua',
     confirmSelection: 'Konfirmasi',
     tradingSymbolsDescription: 'Kosong = gunakan simbol default. Harus berakhiran USDT (misal BTCUSDT, ETHUSDT)',
-    btcEthLeverageValidation: 'Leverage BTC/ETH harus antara 1-50x',
-    altcoinLeverageValidation: 'Leverage Altcoin harus antara 1-20x',
+    btcEthLeverageValidation: 'Leverage BTC/ETH harus antara 1-125x',
+    altcoinLeverageValidation: 'Leverage Altcoin harus antara 1-125x',
     invalidSymbolFormat: 'Format simbol tidak valid: {symbol}, harus berakhiran USDT',
     systemPromptTemplate: 'Template Prompt Sistem',
     promptTemplateDefault: 'Default Stabil',
@@ -3306,7 +3306,7 @@ export const translations = {
     faqOnlyShortPositions: 'Mengapa AI hanya membuka posisi short?',
     faqOnlyShortPositionsAnswer: 'Biasanya karena Mode Posisi Binance. Solusi: Beralih ke Hedge Mode di Binance Futures → Preferensi → Mode Posisi.',
     faqLeverageSettings: 'Bagaimana cara kerja pengaturan leverage?',
-    faqLeverageSettingsAnswer: 'Leverage diatur di Strategi → Kontrol Risiko: leverage BTC/ETH (biasanya 5-20x) dan leverage Altcoin (biasanya 3-10x).',
+    faqLeverageSettingsAnswer: 'Leverage diatur di Strategi → Kontrol Risiko. Binance USD-M Futures menerima 1-125x jika bracket simbol/notional mengizinkan, tetapi strategi praktis biasanya jauh lebih rendah (misalnya BTC/ETH 5-20x dan Altcoin 3-10x).',
     faqStopLossTakeProfit: 'Apakah NOFX mendukung stop-loss dan take-profit?',
     faqStopLossTakeProfitAnswer: 'AI dapat menyarankan level stop-loss/take-profit dalam keputusannya, tetapi ini bersifat panduan bukan order bursa yang dikodekan keras.',
     faqMultipleTraders: 'Bisakah saya menjalankan beberapa trader?',

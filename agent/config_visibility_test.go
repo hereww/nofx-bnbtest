@@ -184,7 +184,7 @@ func TestToolManageStrategyUpdateRejectsOutOfRangeLeverageBeforeSave(t *testing.
 		t.Fatalf("create strategy: %v", err)
 	}
 
-	resp := a.toolManageStrategy("default", `{"action":"update","strategy_id":"strategy-risk-guard","config":{"risk_control":{"btc_eth_max_leverage":100,"altcoin_max_leverage":100}}}`)
+	resp := a.toolManageStrategy("default", `{"action":"update","strategy_id":"strategy-risk-guard","config":{"risk_control":{"btc_eth_max_leverage":126,"altcoin_max_leverage":126}}}`)
 	if !strings.Contains(resp, `不会按你给的原值直接保存`) {
 		t.Fatalf("expected out-of-range leverage update to be rejected before save, got: %s", resp)
 	}
