@@ -56,12 +56,20 @@ func runBot(token string, cfg *config.Config, st *store.Store) bool {
 		logger.Errorf("Telegram bot failed to start: %v", err)
 		return false
 	}
-	logger.Infof("Telegram bot @%s started", bot.Self.UserName)
+	logger.Infof("Telegram bot @%s started (groups=%t, privacy_mode=%t)",
+		bot.Self.UserName, bot.Self.CanJoinGroups, !bot.Self.CanReadAllGroupMessages)
 
-	// Allowed chat ID: read from DB binding (0 = unbound, first /start will bind).
-	allowedChatID := int64(0)
-	if id, err := st.TelegramConfig().GetBoundChatID(); err == nil && id != 0 {
-		allowedChatID = id
+	// Preserve the existing private binding and optionally allow one group.
+	// In a group, only the Telegram user who owns the private binding may operate the bot.
+	var privateChatID, ownerUserID, groupChatID int64
+	if tgCfg, err := st.TelegramConfig().Get(); err == nil {
+		privateChatID = tgCfg.ChatID
+		ownerUserID = tgCfg.UserID
+		groupChatID = tgCfg.GroupChatID
+		// Legacy private bindings predate user_id. A private chat ID equals its user's ID.
+		if ownerUserID == 0 && privateChatID > 0 {
+			ownerUserID = privateChatID
+		}
 	}
 
 	// botUserID / botToken / agents are resolved lazily and refresh when user registers.
@@ -70,6 +78,7 @@ func runBot(token string, cfg *config.Config, st *store.Store) bool {
 		botUserEmail string
 		botToken     string
 		agents       *agent.Manager
+		guestAgents  *agent.Manager
 	)
 
 	resolveBotUser := func() bool {
@@ -94,6 +103,9 @@ func runBot(token string, cfg *config.Config, st *store.Store) bool {
 			func() mcp.AIClient { return newLLMClient(st, botUserID) },
 			api.GetAPIDocs(),
 		)
+		guestAgents = agent.NewReadOnlyManager(
+			func() mcp.AIClient { return newLLMClient(st, botUserID) },
+		)
 		if prev == "" {
 			logger.Infof("Bot: resolved user %s (%s)", botUserID, botUserEmail)
 		} else {
@@ -107,20 +119,32 @@ func runBot(token string, cfg *config.Config, st *store.Store) bool {
 	u.Timeout = 60
 	updates := bot.GetUpdatesChan(u)
 
-	// awaitingLang is set only when the user explicitly runs /lang.
-	awaitingLang := false
+	// awaitingLang is scoped per authorized chat.
+	awaitingLang := make(map[int64]bool)
 
 	for update := range updates {
-		if update.Message == nil {
+		if update.Message == nil || update.Message.Chat == nil {
 			continue
 		}
-		chatID := update.Message.Chat.ID
-		text := strings.TrimSpace(update.Message.Text)
+		message := update.Message
+		chatID := message.Chat.ID
+		senderID := int64(0)
+		if message.From != nil {
+			senderID = message.From.ID
+		}
+		isPrivate := message.Chat.IsPrivate()
+		isGroup := message.Chat.IsGroup() || message.Chat.IsSuperGroup()
+		command := commandForBot(message, bot.Self.UserName)
+		text := strings.TrimSpace(message.Text)
+		isOwner := ownerUserID != 0 && senderID == ownerUserID
+		authorizedPrivate := isPrivate && chatID == privateChatID && isOwner
+		boundGroup := isGroup && chatID == groupChatID
+		authorizedGroup := boundGroup && isOwner
 
 		// ── Language selection (triggered only by /lang) ──────────────────────
-		if awaitingLang && chatID == allowedChatID {
+		if awaitingLang[chatID] && (authorizedPrivate || authorizedGroup) {
 			if lang := parseLangChoice(text); lang != "" {
-				awaitingLang = false
+				delete(awaitingLang, chatID)
 				st.TelegramConfig().SetLanguage(lang) //nolint:errcheck
 				sendMarkdownMsg(bot, chatID, statusMsg(st, botUserID, cfg.APIServerPort, lang))
 			} else {
@@ -130,26 +154,52 @@ func runBot(token string, cfg *config.Config, st *store.Store) bool {
 		}
 
 		// ── /start ────────────────────────────────────────────────────────────
-		if text == "/start" {
+		if command == "start" {
 			resolveBotUser()
 			if botUserID == "" {
 				sendMsg(bot, chatID,
 					"No account found.\nOpen the web dashboard to register, then send /start.")
 				continue
 			}
-			if allowedChatID == 0 {
-				username := update.Message.From.UserName
-				if err := st.TelegramConfig().BindUser(chatID, "@"+username); err != nil {
+			if isGroup {
+				if groupChatID == chatID && isOwner {
+					agents.Reset(chatID)
+					lang := st.TelegramConfig().GetLanguage()
+					sendMarkdownMsg(bot, chatID, statusMsg(st, botUserID, cfg.APIServerPort, lang))
+				} else if groupChatID == chatID {
+					sendMsg(bot, chatID, "本群已接入 NOFX。发送 /ask@"+bot.Self.UserName+" 你的问题，或直接 @Bot 对话。")
+				} else if privateChatID == 0 {
+					sendMsg(bot, chatID, "请先私聊 Bot 发送 /start 绑定管理员，再回群发送 /bindgroup@"+bot.Self.UserName+"。")
+				} else if !isOwner {
+					sendMsg(bot, chatID, "只有已绑定的 Telegram 管理员可以把本群接入交易系统。")
+				} else {
+					sendMsg(bot, chatID, "请发送 /bindgroup@"+bot.Self.UserName+" 绑定本群。")
+				}
+				continue
+			}
+			if !isPrivate || senderID == 0 {
+				continue
+			}
+			if privateChatID == 0 {
+				username := telegramUsername(message.From)
+				if err := st.TelegramConfig().BindUser(chatID, senderID, username); err != nil {
 					logger.Errorf("Failed to bind Telegram user: %v", err)
 					sendMsg(bot, chatID, "Binding failed. Please try again.")
 					continue
 				}
-				allowedChatID = chatID
-				logger.Infof("Telegram bound to @%s (chatID: %d)", username, chatID)
-			} else if chatID != allowedChatID {
+				privateChatID = chatID
+				ownerUserID = senderID
+				isOwner = true
+				authorizedPrivate = true
+				logger.Infof("Telegram owner bound to %s (userID: %d, chatID: %d)", username, senderID, chatID)
+			} else if chatID != privateChatID || !isOwner {
 				sendMsg(bot, chatID, "This bot is already bound to another account.")
 				continue
 			} else {
+				// Backfill the owner identity for deployments created before group support.
+				if tgCfg, err := st.TelegramConfig().Get(); err == nil && tgCfg.UserID == 0 {
+					st.TelegramConfig().BindUser(chatID, senderID, telegramUsername(message.From)) //nolint:errcheck
+				}
 				agents.Reset(chatID)
 			}
 			lang := st.TelegramConfig().GetLanguage()
@@ -157,30 +207,110 @@ func runBot(token string, cfg *config.Config, st *store.Store) bool {
 			continue
 		}
 
+		// ── Group binding ─────────────────────────────────────────────────────
+		if command == "bindgroup" {
+			if !isGroup {
+				sendMsg(bot, chatID, "请在需要接入的 Telegram 群里发送此命令。")
+				continue
+			}
+			if privateChatID == 0 {
+				sendMsg(bot, chatID, "请先私聊 Bot 发送 /start 绑定管理员。")
+				continue
+			}
+			if !isOwner {
+				sendMsg(bot, chatID, "只有已绑定的 Telegram 管理员可以执行此操作。")
+				continue
+			}
+			if err := st.TelegramConfig().BindGroup(chatID, senderID, message.Chat.Title); err != nil {
+				logger.Errorf("Failed to bind Telegram group: %v", err)
+				sendMsg(bot, chatID, "群聊绑定失败，请稍后重试。")
+				continue
+			}
+			groupChatID = chatID
+			authorizedGroup = true
+			agents.Reset(chatID)
+			logger.Infof("Telegram group bound (chatID: %d, ownerUserID: %d, title: %q)", chatID, senderID, message.Chat.Title)
+			sendMsg(bot, chatID,
+				"✅ 本群已接入 NOFX。\n\n"+
+					"所有群成员都可以发送 /ask@"+bot.Self.UserName+" 你的问题，或直接 @Bot 对话；之后回复 Bot 的消息即可继续。\n"+
+					"群成员使用独立只读会话；只有已绑定管理员可以访问账户和控制交易系统。")
+			continue
+		}
+
+		if command == "unbindgroup" {
+			if !authorizedGroup {
+				if isGroup {
+					sendMsg(bot, chatID, "只有本群已绑定的 Telegram 管理员可以执行此操作。")
+				}
+				continue
+			}
+			if err := st.TelegramConfig().UnbindGroup(); err != nil {
+				logger.Errorf("Failed to unbind Telegram group: %v", err)
+				sendMsg(bot, chatID, "群聊解绑失败，请稍后重试。")
+				continue
+			}
+			groupChatID = 0
+			delete(awaitingLang, chatID)
+			logger.Infof("Telegram group unbound (chatID: %d, ownerUserID: %d)", chatID, senderID)
+			sendMsg(bot, chatID, "本群已与 NOFX 解绑，私聊绑定仍然保留。")
+			continue
+		}
+
 		// ── /lang ─────────────────────────────────────────────────────────────
-		if text == "/lang" {
-			awaitingLang = true
+		if command == "lang" {
+			if !authorizedPrivate && !authorizedGroup {
+				continue
+			}
+			awaitingLang[chatID] = true
 			sendMarkdownMsg(bot, chatID, langMenuMsg())
 			continue
 		}
 
 		// ── /help ─────────────────────────────────────────────────────────────
-		if text == "/help" {
+		if command == "help" {
+			if !authorizedPrivate && !boundGroup {
+				continue
+			}
 			lang := st.TelegramConfig().GetLanguage()
-			sendMarkdownMsg(bot, chatID, helpMsg(lang))
+			if boundGroup && !isOwner {
+				sendMarkdownMsg(bot, chatID, guestHelpMsg(lang))
+			} else {
+				sendMarkdownMsg(bot, chatID, helpMsg(lang))
+			}
 			continue
 		}
 
 		// ── Access control ────────────────────────────────────────────────────
-		if allowedChatID != 0 && chatID != allowedChatID {
-			sendMsg(bot, chatID, "Unauthorized.")
-			continue
-		}
-		if allowedChatID == 0 {
-			sendMsg(bot, chatID, "Send /start first.")
+		if isPrivate {
+			if privateChatID == 0 {
+				sendMsg(bot, chatID, "Send /start first.")
+				continue
+			}
+			if !authorizedPrivate {
+				sendMsg(bot, chatID, "Unauthorized.")
+				continue
+			}
+			if command == "ask" {
+				text = strings.TrimSpace(message.CommandArguments())
+			}
+		} else if isGroup {
+			if !boundGroup {
+				// Ignore ordinary group traffic. This avoids leaking account state or
+				// turning the bot into a noisy participant in an unbound group.
+				continue
+			}
+			var addressed bool
+			text, addressed = groupPrompt(message, &bot.Self)
+			if !addressed {
+				continue
+			}
+		} else {
 			continue
 		}
 		if text == "" {
+			if command == "ask" {
+				sendMsg(bot, chatID, "用法：/ask@"+bot.Self.UserName+" 你的问题")
+			}
 			continue
 		}
 
@@ -191,17 +321,31 @@ func runBot(token string, cfg *config.Config, st *store.Store) bool {
 			continue
 		}
 
-		lang := st.TelegramConfig().GetLanguage()
-
-		// ── Guard: show status if not ready for trading ───────────────────────
+		// ── Guard: verify an AI model is available ────────────────────────────
 		if newLLMClient(st, botUserID) == nil {
-			sendMarkdownMsg(bot, chatID, statusMsg(st, botUserID, cfg.APIServerPort, lang))
+			if isOwner {
+				lang := st.TelegramConfig().GetLanguage()
+				sendMarkdownMsg(bot, chatID, statusMsg(st, botUserID, cfg.APIServerPort, lang))
+			} else {
+				sendMsg(bot, chatID, "AI 助手暂不可用，请联系群管理员检查模型配置。")
+			}
 			continue
 		}
 
 		// ── AI agent ─────────────────────────────────────────────────────────
-		go func(chatID int64, text string) {
-			sent, err := bot.Send(tgbotapi.NewMessage(chatID, "⏳"))
+		conversationID := senderID
+		if conversationID == 0 && message.SenderChat != nil {
+			conversationID = message.SenderChat.ID
+		}
+		if conversationID == 0 {
+			conversationID = int64(message.MessageID)
+		}
+		go func(chatID, conversationID int64, messageID int, groupMessage, fullAccess bool, text string) {
+			placeholder := tgbotapi.NewMessage(chatID, "⏳")
+			if groupMessage {
+				placeholder.ReplyToMessageID = messageID
+			}
+			sent, err := bot.Send(placeholder)
 			placeholderID := 0
 			if err == nil {
 				placeholderID = sent.MessageID
@@ -225,7 +369,12 @@ func runBot(token string, cfg *config.Config, st *store.Store) bool {
 				bot.Send(edit) //nolint:errcheck
 			}
 
-			reply := agents.Run(chatID, text, onChunk)
+			var reply string
+			if fullAccess {
+				reply = agents.Run(chatID, text, onChunk)
+			} else {
+				reply = guestAgents.Run(conversationID, text, onChunk)
+			}
 
 			if placeholderID != 0 {
 				edit := tgbotapi.NewEditMessageText(chatID, placeholderID, reply)
@@ -236,13 +385,16 @@ func runBot(token string, cfg *config.Config, st *store.Store) bool {
 				}
 			} else {
 				msg := tgbotapi.NewMessage(chatID, reply)
+				if groupMessage {
+					msg.ReplyToMessageID = messageID
+				}
 				msg.ParseMode = "Markdown"
 				if _, err := bot.Send(msg); err != nil {
 					msg.ParseMode = ""
 					bot.Send(msg) //nolint:errcheck
 				}
 			}
-		}(chatID, text)
+		}(chatID, conversationID, message.MessageID, isGroup, isOwner, text)
 	}
 
 	return true
@@ -262,6 +414,71 @@ func sendMarkdownMsg(bot *tgbotapi.BotAPI, chatID int64, text string) {
 		plain := tgbotapi.NewMessage(chatID, text)
 		bot.Send(plain) //nolint:errcheck
 	}
+}
+
+func commandForBot(message *tgbotapi.Message, botUsername string) string {
+	if message == nil || !message.IsCommand() {
+		return ""
+	}
+	commandWithAt := message.CommandWithAt()
+	if at := strings.LastIndex(commandWithAt, "@"); at >= 0 {
+		if !strings.EqualFold(commandWithAt[at+1:], botUsername) {
+			return ""
+		}
+	}
+	return strings.ToLower(message.Command())
+}
+
+func groupPrompt(message *tgbotapi.Message, bot *tgbotapi.User) (string, bool) {
+	if message == nil || bot == nil {
+		return "", false
+	}
+
+	if commandForBot(message, bot.UserName) == "ask" {
+		return strings.TrimSpace(message.CommandArguments()), true
+	}
+
+	text := strings.TrimSpace(message.Text)
+	if text == "" {
+		return "", false
+	}
+
+	repliedToBot := message.ReplyToMessage != nil &&
+		message.ReplyToMessage.From != nil &&
+		message.ReplyToMessage.From.ID == bot.ID
+
+	mention := "@" + bot.UserName
+	mentioned := bot.UserName != "" && strings.Contains(strings.ToLower(text), strings.ToLower(mention))
+	if !repliedToBot && !mentioned {
+		return "", false
+	}
+	if mentioned {
+		text = removeFold(text, mention)
+	}
+	return strings.TrimSpace(text), true
+}
+
+func removeFold(text, target string) string {
+	if target == "" {
+		return text
+	}
+	for {
+		index := strings.Index(strings.ToLower(text), strings.ToLower(target))
+		if index < 0 {
+			return text
+		}
+		text = text[:index] + text[index+len(target):]
+	}
+}
+
+func telegramUsername(user *tgbotapi.User) string {
+	if user == nil {
+		return ""
+	}
+	if user.UserName != "" {
+		return "@" + user.UserName
+	}
+	return user.String()
 }
 
 // ── LLM client ───────────────────────────────────────────────────────────────
@@ -434,7 +651,12 @@ func helpMsg(lang string) string {
 *命令*
 /start — 刷新状态
 /lang  — 切换语言
-/help  — 帮助`
+/help  — 帮助
+/bindgroup — 在群内绑定当前群
+/ask 问题 — 在群内开始对话
+/unbindgroup — 解绑当前群
+
+群内所有成员都可以对话；只有已绑定管理员可以访问账户和操作交易系统。`
 	}
 	return `*NOFX Help*
 
@@ -455,5 +677,35 @@ func helpMsg(lang string) string {
 *Commands*
 /start — refresh status
 /lang  — change language
-/help  — show this`
+/help  — show this
+/bindgroup — bind the current group
+/ask question — start a group conversation
+/unbindgroup — unbind the current group
+
+Everyone in the bound group can chat. Only the bound administrator can access the account or operate the trading system.`
+}
+
+func guestHelpMsg(lang string) string {
+	if lang == "zh" {
+		return `*NOFX 群聊助手*
+
+你可以询问：
+• 市场结构、指标和交易概念
+• 风险管理与策略设计
+• NOFX 的一般使用方法
+
+使用 /ask 问题、@Bot，或回复 Bot 的消息继续对话。
+
+出于安全考虑，账户、持仓和交易操作仅限绑定管理员。`
+	}
+	return `*NOFX Group Assistant*
+
+You can ask about:
+• Market structure, indicators, and trading concepts
+• Risk management and strategy design
+• General NOFX usage
+
+Use /ask question, mention the Bot, or reply to a Bot message.
+
+For security, account data and trading operations are restricted to the bound administrator.`
 }

@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"nofx/config"
+	"nofx/onchain"
 	"nofx/store"
 )
 
@@ -26,6 +27,30 @@ func TestOnchainTokenAnalysisRejectsInvalidAddress(t *testing.T) {
 	srv.router.ServeHTTP(rec, req)
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestOnchainEarlyWalletFlowProxyUnavailable(t *testing.T) {
+	config.Init()
+	config.Get().OnchainIndexerURL = "http://127.0.0.1:1"
+	defer func() { config.Get().OnchainIndexerURL = "" }()
+
+	st, err := store.New(":memory:")
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	defer st.Close()
+
+	srv := NewServer(nil, st, nil, 0)
+	req := httptest.NewRequest(http.MethodGet, "/api/onchain/early-wallet-flow?chain=bsc&address=0x812fc5119b772c6c7a66249a559f3614623f4444", nil)
+	rec := httptest.NewRecorder()
+
+	srv.router.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadGateway {
+		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	if body := rec.Body.String(); !strings.Contains(body, onchain.StatusIndexerUnavailable) {
+		t.Fatalf("expected %s body, got %s", onchain.StatusIndexerUnavailable, body)
 	}
 }
 

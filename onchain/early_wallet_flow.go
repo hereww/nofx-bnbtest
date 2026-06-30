@@ -78,6 +78,7 @@ type earlySeedCandidate struct {
 func normalizeEarlyWalletFlowRequest(req EarlyWalletFlowRequest) EarlyWalletFlowRequest {
 	req.Chain = normalizeChain(req.Chain)
 	req.Address = normalizeAddress(req.Address)
+	req.IndexSource = normalizeIndexSource(req.IndexSource, store.OnchainIndexScopeEarlyWalletWindow)
 	if req.SeedCount <= 0 || req.SeedCount > maxEarlySeedCount {
 		req.SeedCount = defaultEarlySeedCount
 	}
@@ -109,13 +110,14 @@ func (s *Service) EarlyWalletFlow(ctx context.Context, req EarlyWalletFlowReques
 		Address:      req.Address,
 		Status:       StatusOK,
 		Completeness: "full",
+		IndexSource:  req.IndexSource,
 		SeedCount:    req.SeedCount,
 		MaxDepth:     req.MaxDepth,
 	}
-	if strings.TrimSpace(config.Get().OnchainBSCArchiveRPCURL) == "" {
+	if req.IndexSource == store.OnchainIndexSourceArchiveRPC && strings.TrimSpace(config.Get().OnchainBSCArchiveRPCURL) == "" {
 		resp.Status = StatusArchiveRPCMissing
 		resp.Completeness = "unavailable"
-		resp.Message = "Early-wallet flow requires ONCHAIN_BSC_ARCHIVE_RPC_URL and full-history indexed data."
+		resp.Message = "Early-wallet flow requires ONCHAIN_BSC_ARCHIVE_RPC_URL and early-window indexed data."
 		resp.Summary.Direction = EarlyFlowDirectionInsufficientData
 		resp.Summary.Confidence = "low"
 		resp.Summary.IncompleteReasons = []string{"archive_rpc_missing"}
@@ -138,17 +140,66 @@ func (s *Service) EarlyWalletFlow(ctx context.Context, req EarlyWalletFlowReques
 	if job == nil {
 		resp.Status = StatusIndexRequired
 		resp.Completeness = "unavailable"
-		resp.Message = "Full-history index has not been started for this token."
+		resp.IndexSource = store.OnchainIndexSourceFreeLocal
+		resp.ProgressMessage = "Click Start Index to register the free local early-wallet index. Historical backfill may be slow and partial."
+		resp.Message = "Early-window index has not been started for this token."
 		resp.Summary.Direction = EarlyFlowDirectionInsufficientData
 		resp.Summary.Confidence = "low"
 		resp.Summary.IncompleteReasons = []string{"index_required"}
 		return resp, nil
 	}
+	resp.IndexSource = job.IndexSource
+	resp.Phase = job.Phase
+	resp.Provider = job.Provider
+	resp.RequestBudgetRemaining = job.RequestBudget
+	resp.ProgressMessage = job.ProgressMessage
+	resp.StartBlock = job.StartBlock
+	resp.EndBlock = job.EndBlock
+	resp.LastBlock = job.LastBlock
+	resp.UpdatedAtMS = job.UpdatedAtMS
+	seedWallets, _ := s.store.Onchain().CountEarlyBuyWallets(req.Chain, req.Address, req.SeedCount)
+	resp.SeedWallets = seedWallets
+	if job.IndexSource == store.OnchainIndexSourceArchiveRPC && isArchiveRPCUnsupportedError(job.ErrorMessage) {
+		resp.Status = StatusArchiveRPCUnsupported
+		resp.Completeness = "unavailable"
+		resp.Message = "Archive RPC does not support historical eth_getLogs. Upgrade the RPC plan or use an archive-capable BSC endpoint, then restart the early-window index."
+		resp.Summary.Direction = EarlyFlowDirectionInsufficientData
+		resp.Summary.Confidence = "low"
+		resp.Summary.IncompleteReasons = []string{"archive_rpc_unsupported"}
+		return resp, nil
+	}
 	if job.Status == store.OnchainJobStatusQueued || job.Status == store.OnchainJobStatusIndexing {
 		resp.Status = StatusIndexing
 		resp.Completeness = "partial"
-		resp.Message = "Full-history index is still running; early-wallet flow may be incomplete."
-		resp.Summary.IncompleteReasons = append(resp.Summary.IncompleteReasons, "indexing")
+		if job.IndexSource == store.OnchainIndexSourceFreeLocal {
+			resp.Message = "Free local early-window index is still running; current partial data can be viewed, but conclusions may change as backfill continues."
+		} else {
+			resp.Message = "Early-window index is still running. Wait for it to complete before calculating early-wallet flow."
+		}
+		resp.Summary.Direction = EarlyFlowDirectionInsufficientData
+		resp.Summary.Confidence = "low"
+		resp.Summary.IncompleteReasons = []string{"indexing"}
+		errorMessage := strings.ToLower(job.ErrorMessage)
+		progressMessage := strings.ToLower(job.ProgressMessage)
+		if strings.Contains(errorMessage, "rate limited") {
+			resp.Message = "RPC is rate limited; the early-window index is queued for retry."
+			resp.Summary.IncompleteReasons = appendMissingReason(resp.Summary.IncompleteReasons, "rpc_rate_limited")
+		}
+		if strings.Contains(errorMessage, "free logs daily budget") {
+			resp.Message = "Free Etherscan log request budget is exhausted; the early-window index is queued for retry."
+			resp.Summary.IncompleteReasons = appendMissingReason(resp.Summary.IncompleteReasons, "free_logs_budget_exhausted")
+		}
+		if strings.Contains(errorMessage, "rpc transport retrying") {
+			resp.Message = "Free RPC transport is temporarily unavailable; the early-window index is queued for retry."
+			resp.Summary.IncompleteReasons = appendMissingReason(resp.Summary.IncompleteReasons, "rpc_transport_retrying")
+		}
+		if strings.Contains(progressMessage, "pool_created_block_pending") || strings.Contains(errorMessage, "pool_created_block_pending") {
+			resp.Message = "Pool discovery is waiting for a reliable created block before scanning the early-wallet window."
+			resp.Summary.IncompleteReasons = appendMissingReason(resp.Summary.IncompleteReasons, "pool_created_block_pending")
+		}
+		if job.IndexSource != store.OnchainIndexSourceFreeLocal || resp.SeedWallets == 0 {
+			return resp, nil
+		}
 	}
 	if job.Status == store.OnchainJobStatusFailed {
 		resp.Status = StatusPartialData
@@ -156,12 +207,11 @@ func (s *Service) EarlyWalletFlow(ctx context.Context, req EarlyWalletFlowReques
 		resp.Message = job.ErrorMessage
 		resp.Summary.IncompleteReasons = append(resp.Summary.IncompleteReasons, "index_failed")
 	}
+	if job.IndexSource == store.OnchainIndexSourceFreeLocal && strings.Contains(strings.ToLower(job.Provider), "geckoterminal") && resp.Message == "" {
+		resp.Message = "Free public GeckoTerminal data is being used; old-token history may be recent-window limited, but no paid Archive RPC is required."
+	}
 
 	pools, err := s.store.Onchain().ListPools(req.Chain, req.Address)
-	if err != nil {
-		return nil, err
-	}
-	transfers, err := s.store.Onchain().ListTransfers(req.Chain, req.Address)
 	if err != nil {
 		return nil, err
 	}
@@ -169,7 +219,26 @@ func (s *Service) EarlyWalletFlow(ctx context.Context, req EarlyWalletFlowReques
 	if err != nil {
 		return nil, err
 	}
+	seedAddresses, err := s.store.Onchain().ListEarlyBuyWallets(req.Chain, req.Address, req.SeedCount)
+	if err != nil {
+		return nil, err
+	}
+	transfers, err := s.listSeedGraphTransfers(req.Chain, req.Address, seedAddresses, req.MaxDepth)
+	if err != nil {
+		return nil, err
+	}
 	buildEarlyWalletFlow(resp, req, pools, transfers, swaps)
+	if job.IndexSource == store.OnchainIndexSourceFreeLocal && resp.Status == StatusOK && tokenAnalysisIsPartial(token) {
+		resp.Completeness = "partial"
+	}
+	if len(transfers) == 0 && hasEarlyWalletFlowData(resp) {
+		resp.Status = mergeEarlyStatus(resp.Status, StatusPartialData)
+		resp.Completeness = "partial"
+		resp.Summary.IncompleteReasons = appendMissingReason(resp.Summary.IncompleteReasons, "missing_transfer_graph")
+		if resp.Message == "" {
+			resp.Message = "Early buy wallets were found. Transfer graph enrichment is limited on the free public-data path."
+		}
+	}
 	if len(swaps) == 0 {
 		resp.Status = mergeEarlyStatus(resp.Status, StatusPartialData)
 		resp.Completeness = "partial"
@@ -179,6 +248,67 @@ func (s *Service) EarlyWalletFlow(ctx context.Context, req EarlyWalletFlowReques
 		}
 	}
 	return resp, nil
+}
+
+func isArchiveRPCUnsupportedError(message string) bool {
+	message = strings.ToLower(strings.TrimSpace(message))
+	return strings.Contains(message, "archive rpc unsupported") ||
+		(strings.Contains(message, "archive") && strings.Contains(message, "eth_getlogs") && strings.Contains(message, "not allow")) ||
+		(strings.Contains(message, "archive") && strings.Contains(message, "not available"))
+}
+
+func tokenAnalysisIsPartial(token *store.OnchainToken) bool {
+	return token != nil && strings.EqualFold(strings.TrimSpace(token.AnalysisCompleteness), "partial")
+}
+
+func hasEarlyWalletFlowData(resp *EarlyWalletFlowResponse) bool {
+	return resp != nil && resp.Summary.SeedWalletCount > 0
+}
+
+func (s *Service) listSeedGraphTransfers(chain, tokenAddress string, seeds []string, maxDepth int) ([]store.OnchainTokenTransfer, error) {
+	if maxDepth <= 0 || len(seeds) == 0 {
+		return nil, nil
+	}
+	known := map[string]bool{}
+	frontier := make([]string, 0, len(seeds))
+	for _, seed := range seeds {
+		seed = normalizeAddress(seed)
+		if seed == "" || known[seed] {
+			continue
+		}
+		known[seed] = true
+		frontier = append(frontier, seed)
+	}
+	var out []store.OnchainTokenTransfer
+	seenTransfer := map[string]bool{}
+	for depth := 0; depth < maxDepth && len(frontier) > 0; depth++ {
+		batch, err := s.store.Onchain().ListTransfersForAddresses(chain, tokenAddress, frontier)
+		if err != nil {
+			return nil, err
+		}
+		next := []string{}
+		for _, tr := range batch {
+			key := strings.ToLower(tr.TxHash) + "|" + strconv.FormatInt(tr.LogIndex, 10)
+			if !seenTransfer[key] {
+				seenTransfer[key] = true
+				out = append(out, tr)
+			}
+			from := normalizeAddress(tr.FromAddress)
+			to := normalizeAddress(tr.ToAddress)
+			if known[from] && to != "" && !known[to] {
+				known[to] = true
+				next = append(next, to)
+			}
+		}
+		frontier = next
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		if out[i].BlockNumber != out[j].BlockNumber {
+			return out[i].BlockNumber < out[j].BlockNumber
+		}
+		return out[i].LogIndex < out[j].LogIndex
+	})
+	return out, nil
 }
 
 func mergeEarlyStatus(current, next string) string {
@@ -444,6 +574,9 @@ func earlySystemAddressSet(tokenAddress string, pools []store.OnchainPool) map[s
 		normalizeAddress(tokenAddress): true,
 		"0x0000000000000000000000000000000000000000": true,
 		"0x000000000000000000000000000000000000dead": true,
+		"0x05ff2b0d3c5d22a9ed84c8b6f1d957a2fdd6d571": true,
+		"0x10ed43c718714eb63d5aa57b78b54704e256024e": true,
+		"0x13f4ea83d0bd40e75c8222255bc855a974568dd4": true,
 	}
 	for _, pool := range pools {
 		system[normalizeAddress(pool.PoolAddress)] = true

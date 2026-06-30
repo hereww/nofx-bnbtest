@@ -166,23 +166,32 @@ type DealerFlowSignals struct {
 }
 
 type IndexTokenRequest struct {
-	Chain      string `json:"chain"`
-	Address    string `json:"address"`
-	StartBlock int64  `json:"start_block,omitempty"`
-	EndBlock   int64  `json:"end_block,omitempty"`
+	Chain       string `json:"chain"`
+	Address     string `json:"address"`
+	Scope       string `json:"scope,omitempty"`
+	IndexSource string `json:"index_source,omitempty"`
+	StartBlock  int64  `json:"start_block,omitempty"`
+	EndBlock    int64  `json:"end_block,omitempty"`
 }
 
 type IndexStatusResponse struct {
-	Success      bool   `json:"success"`
-	Chain        string `json:"chain"`
-	Address      string `json:"address"`
-	Status       string `json:"status"`
-	Message      string `json:"message,omitempty"`
-	StartBlock   int64  `json:"start_block,omitempty"`
-	EndBlock     int64  `json:"end_block,omitempty"`
-	LastBlock    int64  `json:"last_block,omitempty"`
-	UpdatedAtMS  int64  `json:"updated_at_ms,omitempty"`
-	ErrorMessage string `json:"error_message,omitempty"`
+	Success                bool   `json:"success"`
+	Chain                  string `json:"chain"`
+	Address                string `json:"address"`
+	Status                 string `json:"status"`
+	Scope                  string `json:"scope,omitempty"`
+	IndexSource            string `json:"index_source,omitempty"`
+	Phase                  string `json:"phase,omitempty"`
+	Provider               string `json:"provider,omitempty"`
+	RequestBudgetRemaining int    `json:"request_budget_remaining,omitempty"`
+	Message                string `json:"message,omitempty"`
+	ProgressMessage        string `json:"progress_message,omitempty"`
+	StartBlock             int64  `json:"start_block,omitempty"`
+	EndBlock               int64  `json:"end_block,omitempty"`
+	LastBlock              int64  `json:"last_block,omitempty"`
+	SeedWallets            int64  `json:"seed_wallets,omitempty"`
+	UpdatedAtMS            int64  `json:"updated_at_ms,omitempty"`
+	ErrorMessage           string `json:"error_message,omitempty"`
 }
 
 type WalletGraphRequest struct {
@@ -232,29 +241,40 @@ type WalletGraphEdge struct {
 }
 
 type EarlyWalletFlowRequest struct {
-	Chain     string `json:"chain"`
-	Address   string `json:"address"`
-	SeedCount int    `json:"seed_count,omitempty"`
-	MaxDepth  int    `json:"max_depth,omitempty"`
+	Chain       string `json:"chain"`
+	Address     string `json:"address"`
+	IndexSource string `json:"index_source,omitempty"`
+	SeedCount   int    `json:"seed_count,omitempty"`
+	MaxDepth    int    `json:"max_depth,omitempty"`
 }
 
 type EarlyWalletFlowResponse struct {
-	Success      bool                    `json:"success"`
-	Chain        string                  `json:"chain"`
-	Address      string                  `json:"address"`
-	Status       string                  `json:"status"`
-	Completeness string                  `json:"completeness"`
-	Message      string                  `json:"message,omitempty"`
-	Token        TokenProfile            `json:"token"`
-	SeedCount    int                     `json:"seed_count"`
-	MaxDepth     int                     `json:"max_depth"`
-	QuoteToken   string                  `json:"quote_token,omitempty"`
-	QuoteSymbol  string                  `json:"quote_symbol,omitempty"`
-	Summary      EarlyWalletFlowSummary  `json:"summary"`
-	Seeds        []EarlyWalletSeed       `json:"seeds,omitempty"`
-	Wallets      []EarlyWalletFlowWallet `json:"wallets,omitempty"`
-	Edges        []EarlyWalletFlowEdge   `json:"edges,omitempty"`
-	Error        string                  `json:"error,omitempty"`
+	Success                bool                    `json:"success"`
+	Chain                  string                  `json:"chain"`
+	Address                string                  `json:"address"`
+	Status                 string                  `json:"status"`
+	Completeness           string                  `json:"completeness"`
+	Message                string                  `json:"message,omitempty"`
+	IndexSource            string                  `json:"index_source,omitempty"`
+	Phase                  string                  `json:"phase,omitempty"`
+	Provider               string                  `json:"provider,omitempty"`
+	RequestBudgetRemaining int                     `json:"request_budget_remaining,omitempty"`
+	ProgressMessage        string                  `json:"progress_message,omitempty"`
+	StartBlock             int64                   `json:"start_block,omitempty"`
+	EndBlock               int64                   `json:"end_block,omitempty"`
+	LastBlock              int64                   `json:"last_block,omitempty"`
+	SeedWallets            int64                   `json:"seed_wallets,omitempty"`
+	UpdatedAtMS            int64                   `json:"updated_at_ms,omitempty"`
+	Token                  TokenProfile            `json:"token"`
+	SeedCount              int                     `json:"seed_count"`
+	MaxDepth               int                     `json:"max_depth"`
+	QuoteToken             string                  `json:"quote_token,omitempty"`
+	QuoteSymbol            string                  `json:"quote_symbol,omitempty"`
+	Summary                EarlyWalletFlowSummary  `json:"summary"`
+	Seeds                  []EarlyWalletSeed       `json:"seeds,omitempty"`
+	Wallets                []EarlyWalletFlowWallet `json:"wallets,omitempty"`
+	Edges                  []EarlyWalletFlowEdge   `json:"edges,omitempty"`
+	Error                  string                  `json:"error,omitempty"`
 }
 
 type EarlyWalletFlowSummary struct {

@@ -125,6 +125,7 @@ type geckoIncludedResource struct {
 }
 
 type geckoTrade struct {
+	ID         string          `json:"id"`
 	Attributes geckoTradeAttrs `json:"attributes"`
 }
 
@@ -154,6 +155,10 @@ func (s *Service) buildRecentAnalysis(ctx context.Context, chain, address string
 
 	pools, err := s.discoverPools(ctx, chain, address)
 	if err != nil {
+		fallback := s.buildRecentAnalysisFromLocalStore(chain, address, err)
+		if fallback != nil {
+			return fallback, nil
+		}
 		return resp, err
 	}
 	resp.Pools = pools
@@ -181,6 +186,191 @@ func (s *Service) buildRecentAnalysis(ctx context.Context, chain, address string
 	recent := s.fetchRecentTrades(ctx, address, pools)
 	resp.Recent = recent
 	return resp, nil
+}
+
+func (s *Service) buildRecentAnalysisFromLocalStore(chain, address string, sourceErr error) *TokenAnalysisResponse {
+	token, _ := s.store.Onchain().GetToken(chain, address)
+	storedPools, _ := s.store.Onchain().ListPools(chain, address)
+	job, _ := s.store.Onchain().GetJob(chain, address)
+	if token == nil && len(storedPools) == 0 && job == nil {
+		return nil
+	}
+	if sourceErr != nil {
+		fmt.Printf("[onchain] public market sources unavailable; using local index fallback: %v\n", sourceErr)
+	}
+
+	resp := &TokenAnalysisResponse{
+		Success:      true,
+		Chain:        chain,
+		Address:      address,
+		Depth:        DepthRecent,
+		Status:       StatusPartialData,
+		Completeness: "partial",
+		Source:       []string{"local_onchain_indexer"},
+		Message:      "Public on-chain market sources are temporarily unreachable; using local indexed token and pool data.",
+	}
+	if token != nil {
+		resp.Token.Name = token.Name
+		resp.Token.Symbol = token.Symbol
+		resp.Token.Decimals = token.Decimals
+		resp.Token.TotalSupply = token.TotalSupply
+	}
+	resp.Pools = storePoolsToSnapshots(storedPools, chain)
+	resp.Recent = recentAnalysisFromStoredSwaps(s.store, chain, address)
+	if resp.Recent == nil {
+		resp.Recent = &RecentTradeAnalysis{}
+	}
+	return resp
+}
+
+func storePoolsToSnapshots(pools []store.OnchainPool, chain string) []PoolSnapshot {
+	out := make([]PoolSnapshot, 0, len(pools))
+	for _, pool := range pools {
+		out = append(out, PoolSnapshot{
+			ChainID:      chain,
+			DexID:        pool.DexID,
+			Address:      normalizeAddress(pool.PoolAddress),
+			Name:         pool.Name,
+			BaseToken:    normalizeAddress(pool.BaseToken),
+			QuoteToken:   normalizeAddress(pool.QuoteToken),
+			PairURL:      pool.PairURL,
+			LiquidityUSD: pool.LiquidityUSD,
+			CreatedAtMS:  pool.CreatedAtMS,
+			CreatedBlock: pool.CreatedBlock,
+		})
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		if out[i].CreatedBlock > 0 && out[j].CreatedBlock > 0 && out[i].CreatedBlock != out[j].CreatedBlock {
+			return out[i].CreatedBlock < out[j].CreatedBlock
+		}
+		return out[i].LiquidityUSD > out[j].LiquidityUSD
+	})
+	return out
+}
+
+func recentAnalysisFromStoredSwaps(st *store.Store, chain, address string) *RecentTradeAnalysis {
+	swaps, err := st.Onchain().ListSwaps(chain, address)
+	if err != nil || len(swaps) == 0 {
+		return nil
+	}
+	if len(swaps) > 300 {
+		swaps = swaps[len(swaps)-300:]
+	}
+	result := &RecentTradeAnalysis{}
+	buyers := map[string]bool{}
+	sellers := map[string]bool{}
+	accounts := map[string]*struct {
+		buyCount   int
+		sellCount  int
+		buyAmount  float64
+		sellAmount float64
+		firstBuy   int64
+		lastTrade  int64
+		pools      map[string]bool
+	}{}
+	get := func(addr string) *struct {
+		buyCount   int
+		sellCount  int
+		buyAmount  float64
+		sellAmount float64
+		firstBuy   int64
+		lastTrade  int64
+		pools      map[string]bool
+	} {
+		addr = normalizeAddress(addr)
+		if accounts[addr] == nil {
+			accounts[addr] = &struct {
+				buyCount   int
+				sellCount  int
+				buyAmount  float64
+				sellAmount float64
+				firstBuy   int64
+				lastTrade  int64
+				pools      map[string]bool
+			}{pools: map[string]bool{}}
+		}
+		return accounts[addr]
+	}
+	for _, swap := range swaps {
+		trader := normalizeAddress(swap.TraderAddress)
+		if trader == "" {
+			continue
+		}
+		result.TradeCount++
+		result.VolumeUSD += swap.QuoteAmount
+		if swap.BlockTime > 0 {
+			ts := isoFromMS(swap.BlockTime)
+			if result.WindowStart == "" || ts < result.WindowStart {
+				result.WindowStart = ts
+			}
+			if result.WindowEnd == "" || ts > result.WindowEnd {
+				result.WindowEnd = ts
+			}
+		}
+		w := get(trader)
+		w.lastTrade = maxInt64(w.lastTrade, swap.BlockTime)
+		if swap.PoolAddress != "" {
+			w.pools[normalizeAddress(swap.PoolAddress)] = true
+		}
+		switch strings.ToLower(swap.Side) {
+		case "buy":
+			w.buyCount++
+			w.buyAmount += swap.TokenAmount
+			if swap.BlockTime > 0 && (w.firstBuy == 0 || swap.BlockTime < w.firstBuy) {
+				w.firstBuy = swap.BlockTime
+			}
+			buyers[trader] = true
+			result.BuyCount++
+		case "sell":
+			w.sellCount++
+			w.sellAmount += swap.TokenAmount
+			sellers[trader] = true
+			result.SellCount++
+		}
+	}
+	result.UniqueAddresses = len(accounts)
+	result.UniqueBuyers = len(buyers)
+	result.UniqueSellers = len(sellers)
+	wallets := make([]WalletAnalysis, 0, len(accounts))
+	buckets := map[string]*TimeBucket{}
+	for addr, a := range accounts {
+		net := a.buyAmount - a.sellAmount
+		total := a.buyAmount + a.sellAmount
+		wallet := WalletAnalysis{
+			Address:         addr,
+			WalletType:      walletTypeFromStats(a.buyCount, a.sellCount, len(a.pools), net, total),
+			FirstBuyTime:    a.firstBuy,
+			FirstBuyAt:      isoFromMS(a.firstBuy),
+			BuyCount:        a.buyCount,
+			SellCount:       a.sellCount,
+			BuyAmount:       a.buyAmount,
+			SellAmount:      a.sellAmount,
+			NetBoughtAmount: net,
+			PoolTouchCount:  len(a.pools),
+		}
+		wallets = append(wallets, wallet)
+		if a.firstBuy > 0 {
+			bucketKey := time.UnixMilli(a.firstBuy).UTC().Format("2006-01-02 15:00")
+			b := buckets[bucketKey]
+			if b == nil {
+				b = &TimeBucket{Bucket: bucketKey}
+				buckets[bucketKey] = b
+			}
+			b.BuyerCount++
+			b.BuyAmount += a.buyAmount
+			b.SellAmount += a.sellAmount
+			b.NetAmount += net
+		}
+	}
+	result.TopAccumulators = capWallets(sortedWalletsByNet(wallets, true), 15)
+	result.TopSellers = capWallets(sortedWalletsByNet(wallets, false), 15)
+	for _, bucket := range buckets {
+		result.FirstBuyBuckets = append(result.FirstBuyBuckets, *bucket)
+	}
+	sort.SliceStable(result.FirstBuyBuckets, func(i, j int) bool {
+		return result.FirstBuyBuckets[i].Bucket < result.FirstBuyBuckets[j].Bucket
+	})
+	return result
 }
 
 func (s *Service) discoverPools(ctx context.Context, chain, address string) ([]PoolSnapshot, error) {
@@ -374,7 +564,7 @@ func poolDiscoveryError(errs []error) error {
 		strings.Contains(lower, "context deadline exceeded") ||
 		strings.Contains(lower, "i/o timeout") ||
 		strings.Contains(lower, "timeout") {
-		return fmt.Errorf("on-chain data source timeout: server cannot reliably reach DexScreener/GeckoTerminal; configure ONCHAIN_HTTP_PROXY or check outbound network. details: %s", details)
+		return fmt.Errorf("on-chain data source timeout: server cannot reliably reach DexScreener/GeckoTerminal; configure MARKET_HTTP_PROXY or check outbound network. details: %s", details)
 	}
 	return fmt.Errorf("on-chain pool discovery failed: %s", details)
 }
@@ -382,6 +572,12 @@ func poolDiscoveryError(errs []error) error {
 func poolsToStore(pools []PoolSnapshot, chain, tokenAddress string) []store.OnchainPool {
 	out := make([]store.OnchainPool, 0, len(pools))
 	for _, pool := range pools {
+		token0 := pool.BaseToken
+		token1 := pool.QuoteToken
+		if normalizeAddress(token1) == normalizeAddress(tokenAddress) {
+			token0 = pool.QuoteToken
+			token1 = pool.BaseToken
+		}
 		out = append(out, store.OnchainPool{
 			Chain:        chain,
 			TokenAddress: tokenAddress,
@@ -390,6 +586,8 @@ func poolsToStore(pools []PoolSnapshot, chain, tokenAddress string) []store.Onch
 			Name:         pool.Name,
 			BaseToken:    pool.BaseToken,
 			QuoteToken:   pool.QuoteToken,
+			Token0:       token0,
+			Token1:       token1,
 			CreatedBlock: pool.CreatedBlock,
 			CreatedAtMS:  pool.CreatedAtMS,
 			LiquidityUSD: pool.LiquidityUSD,

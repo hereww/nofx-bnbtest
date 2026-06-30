@@ -30,15 +30,47 @@ services:
       - HTTP_PROXY=${HTTP_PROXY:-}
       - HTTPS_PROXY=${HTTPS_PROXY:-}
       - ALL_PROXY=${ALL_PROXY:-}
-      - NO_PROXY=${NO_PROXY:-localhost,127.0.0.1,::1,nofx,nofx-frontend,nofx-data-gateway}
+      - NO_PROXY=${NO_PROXY:-localhost,127.0.0.1,::1,nofx,nofx-frontend,nofx-data-gateway,nofx-onchain-indexer}
       - http_proxy=${http_proxy:-}
       - https_proxy=${https_proxy:-}
       - all_proxy=${all_proxy:-}
-      - no_proxy=${no_proxy:-localhost,127.0.0.1,::1,nofx,nofx-frontend,nofx-data-gateway}
+      - no_proxy=${no_proxy:-localhost,127.0.0.1,::1,nofx,nofx-frontend,nofx-data-gateway,nofx-onchain-indexer}
     networks:
       - nofx-network
     healthcheck:
       test: ["CMD", "env", "-u", "HTTP_PROXY", "-u", "HTTPS_PROXY", "-u", "ALL_PROXY", "-u", "http_proxy", "-u", "https_proxy", "-u", "all_proxy", "wget", "-q", "-O", "-", "http://127.0.0.1:8090/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  nofx-onchain-indexer:
+    build:
+      context: .
+      dockerfile: ./docker/Dockerfile.onchain-indexer
+    container_name: nofx-onchain-indexer
+    restart: unless-stopped
+    volumes:
+      - ./data:/app/data
+      - /etc/localtime:/etc/localtime:ro
+    env_file:
+      - .env
+    environment:
+      - TZ=${TZ:-Asia/Shanghai}
+      - ONCHAIN_INDEXER_ADDR=:8091
+      - ONCHAIN_INDEXER_DB_PATH=${ONCHAIN_INDEXER_DB_PATH:-data/onchain-indexer.db}
+      - HTTP_PROXY=${HTTP_PROXY:-}
+      - HTTPS_PROXY=${HTTPS_PROXY:-}
+      - ALL_PROXY=${ALL_PROXY:-}
+      - NO_PROXY=${NO_PROXY:-localhost,127.0.0.1,::1,nofx,nofx-frontend,nofx-data-gateway,nofx-onchain-indexer}
+      - http_proxy=${http_proxy:-}
+      - https_proxy=${https_proxy:-}
+      - all_proxy=${all_proxy:-}
+      - no_proxy=${no_proxy:-localhost,127.0.0.1,::1,nofx,nofx-frontend,nofx-data-gateway,nofx-onchain-indexer}
+    networks:
+      - nofx-network
+    healthcheck:
+      test: ["CMD", "env", "-u", "HTTP_PROXY", "-u", "HTTPS_PROXY", "-u", "ALL_PROXY", "-u", "http_proxy", "-u", "https_proxy", "-u", "all_proxy", "wget", "-q", "-O", "-", "http://127.0.0.1:8091/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -63,18 +95,20 @@ services:
       - TZ=${TZ:-Asia/Shanghai}
       - AI_MAX_TOKENS=8000
       - DATA_GATEWAY_URL=${DATA_GATEWAY_URL:-http://nofx-data-gateway:8090}
+      - ONCHAIN_INDEXER_URL=${ONCHAIN_INDEXER_URL:-http://nofx-onchain-indexer:8091}
       - HTTP_PROXY=${HTTP_PROXY:-}
       - HTTPS_PROXY=${HTTPS_PROXY:-}
       - ALL_PROXY=${ALL_PROXY:-}
-      - NO_PROXY=${NO_PROXY:-localhost,127.0.0.1,::1},nofx,nofx-frontend,nofx-data-gateway
+      - NO_PROXY=${NO_PROXY:-localhost,127.0.0.1,::1},nofx,nofx-frontend,nofx-data-gateway,nofx-onchain-indexer
       - http_proxy=${http_proxy:-}
       - https_proxy=${https_proxy:-}
       - all_proxy=${all_proxy:-}
-      - no_proxy=${no_proxy:-localhost,127.0.0.1,::1},nofx,nofx-frontend,nofx-data-gateway
+      - no_proxy=${no_proxy:-localhost,127.0.0.1,::1},nofx,nofx-frontend,nofx-data-gateway,nofx-onchain-indexer
     networks:
       - nofx-network
     depends_on:
       - nofx-data-gateway
+      - nofx-onchain-indexer
     healthcheck:
       test: ["CMD", "env", "-u", "HTTP_PROXY", "-u", "HTTPS_PROXY", "-u", "ALL_PROXY", "-u", "http_proxy", "-u", "https_proxy", "-u", "all_proxy", "wget", "-q", "-O", "-", "http://127.0.0.1:8080/api/health"]
       interval: 30s

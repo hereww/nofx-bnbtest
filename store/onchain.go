@@ -16,6 +16,11 @@ const (
 	OnchainJobStatusCompleted = "completed"
 	OnchainJobStatusFailed    = "failed"
 
+	OnchainIndexScopeFullHistory       = "full_history"
+	OnchainIndexScopeEarlyWalletWindow = "early_wallet_window"
+	OnchainIndexSourceArchiveRPC       = "archive_rpc"
+	OnchainIndexSourceFreeLocal        = "free_local"
+
 	OnchainWalletAccumulator  = "accumulator"
 	OnchainWalletSeller       = "seller"
 	OnchainWalletArbBot       = "arb_bot"
@@ -124,23 +129,46 @@ type OnchainWalletSnapshot struct {
 func (OnchainWalletSnapshot) TableName() string { return "onchain_wallet_snapshots" }
 
 type OnchainIndexJob struct {
-	ID            int64     `gorm:"primaryKey;autoIncrement" json:"id"`
-	Chain         string    `gorm:"column:chain;not null;uniqueIndex:idx_onchain_job_unique,priority:1" json:"chain"`
-	TokenAddress  string    `gorm:"column:token_address;not null;uniqueIndex:idx_onchain_job_unique,priority:2;index" json:"token_address"`
-	Status        string    `gorm:"column:status;not null;default:'queued';index" json:"status"`
-	ErrorMessage  string    `gorm:"column:error_message;default:''" json:"error_message"`
-	StartBlock    int64     `gorm:"column:start_block;default:0" json:"start_block"`
-	EndBlock      int64     `gorm:"column:end_block;default:0" json:"end_block"`
-	LastBlock     int64     `gorm:"column:last_block;default:0" json:"last_block"`
-	BatchSize     int       `gorm:"column:batch_size;default:0" json:"batch_size"`
-	StartedAtMS   int64     `gorm:"column:started_at_ms;default:0" json:"started_at_ms"`
-	CompletedAtMS int64     `gorm:"column:completed_at_ms;default:0" json:"completed_at_ms"`
-	UpdatedAtMS   int64     `gorm:"column:updated_at_ms;default:0" json:"updated_at_ms"`
-	CreatedAt     time.Time `gorm:"autoCreateTime" json:"created_at"`
-	UpdatedAt     time.Time `gorm:"autoUpdateTime" json:"updated_at"`
+	ID              int64     `gorm:"primaryKey;autoIncrement" json:"id"`
+	Chain           string    `gorm:"column:chain;not null;uniqueIndex:idx_onchain_job_unique,priority:1" json:"chain"`
+	TokenAddress    string    `gorm:"column:token_address;not null;uniqueIndex:idx_onchain_job_unique,priority:2;index" json:"token_address"`
+	Status          string    `gorm:"column:status;not null;default:'queued';index" json:"status"`
+	Scope           string    `gorm:"column:scope;default:'full_history';index" json:"scope"`
+	IndexSource     string    `gorm:"column:index_source;default:'archive_rpc';index" json:"index_source"`
+	Phase           string    `gorm:"column:phase;default:'';index" json:"phase"`
+	Provider        string    `gorm:"column:provider;default:'';index" json:"provider"`
+	RequestBudget   int       `gorm:"column:request_budget_remaining;default:0" json:"request_budget_remaining"`
+	ProgressMessage string    `gorm:"column:progress_message;default:''" json:"progress_message"`
+	ErrorMessage    string    `gorm:"column:error_message;default:''" json:"error_message"`
+	StartBlock      int64     `gorm:"column:start_block;default:0" json:"start_block"`
+	EndBlock        int64     `gorm:"column:end_block;default:0" json:"end_block"`
+	LastBlock       int64     `gorm:"column:last_block;default:0" json:"last_block"`
+	BatchSize       int       `gorm:"column:batch_size;default:0" json:"batch_size"`
+	StartedAtMS     int64     `gorm:"column:started_at_ms;default:0" json:"started_at_ms"`
+	CompletedAtMS   int64     `gorm:"column:completed_at_ms;default:0" json:"completed_at_ms"`
+	UpdatedAtMS     int64     `gorm:"column:updated_at_ms;default:0" json:"updated_at_ms"`
+	CreatedAt       time.Time `gorm:"autoCreateTime" json:"created_at"`
+	UpdatedAt       time.Time `gorm:"autoUpdateTime" json:"updated_at"`
 }
 
 func (OnchainIndexJob) TableName() string { return "onchain_index_jobs" }
+
+type OnchainLocalIndexTask struct {
+	ID              int64     `gorm:"primaryKey;autoIncrement" json:"id"`
+	Chain           string    `gorm:"column:chain;not null;uniqueIndex:idx_onchain_local_index_task_unique,priority:1" json:"chain"`
+	TokenAddress    string    `gorm:"column:token_address;not null;uniqueIndex:idx_onchain_local_index_task_unique,priority:2;index" json:"token_address"`
+	Enabled         bool      `gorm:"column:enabled;not null;default:true;index" json:"enabled"`
+	IndexSource     string    `gorm:"column:index_source;default:'free_local';index" json:"index_source"`
+	StartBlock      int64     `gorm:"column:start_block;default:0" json:"start_block"`
+	LastBlock       int64     `gorm:"column:last_block;default:0" json:"last_block"`
+	Status          string    `gorm:"column:status;not null;default:'queued';index" json:"status"`
+	LastError       string    `gorm:"column:last_error;default:''" json:"last_error"`
+	ProgressMessage string    `gorm:"column:progress_message;default:''" json:"progress_message"`
+	CreatedAt       time.Time `gorm:"autoCreateTime" json:"created_at"`
+	UpdatedAt       time.Time `gorm:"autoUpdateTime" json:"updated_at"`
+}
+
+func (OnchainLocalIndexTask) TableName() string { return "onchain_local_index_tasks" }
 
 type OnchainStore struct {
 	db *gorm.DB
@@ -158,6 +186,7 @@ func (s *OnchainStore) initTables() error {
 		&OnchainSwap{},
 		&OnchainWalletSnapshot{},
 		&OnchainIndexJob{},
+		&OnchainLocalIndexTask{},
 	); err != nil {
 		return fmt.Errorf("failed to migrate onchain tables: %w", err)
 	}
@@ -255,6 +284,12 @@ func (s *OnchainStore) InsertSwaps(swaps []OnchainSwap) error {
 func (s *OnchainStore) UpsertJob(job *OnchainIndexJob) error {
 	job.Chain = normalizeChain(job.Chain)
 	job.TokenAddress = normalizeAddress(job.TokenAddress)
+	if strings.TrimSpace(job.Scope) == "" {
+		job.Scope = OnchainIndexScopeFullHistory
+	}
+	if strings.TrimSpace(job.IndexSource) == "" {
+		job.IndexSource = OnchainIndexSourceArchiveRPC
+	}
 	now := time.Now().UTC().UnixMilli()
 	if job.UpdatedAtMS == 0 {
 		job.UpdatedAtMS = now
@@ -262,10 +297,46 @@ func (s *OnchainStore) UpsertJob(job *OnchainIndexJob) error {
 	return s.db.Clauses(clause.OnConflict{
 		Columns: []clause.Column{{Name: "chain"}, {Name: "token_address"}},
 		DoUpdates: clause.AssignmentColumns([]string{
-			"status", "error_message", "start_block", "end_block", "last_block",
+			"status", "scope", "index_source", "phase", "provider", "request_budget_remaining", "progress_message", "error_message", "start_block", "end_block", "last_block",
 			"batch_size", "started_at_ms", "completed_at_ms", "updated_at_ms", "updated_at",
 		}),
 	}).Create(job).Error
+}
+
+func (s *OnchainStore) UpsertLocalIndexTask(task *OnchainLocalIndexTask) error {
+	task.Chain = normalizeChain(task.Chain)
+	task.TokenAddress = normalizeAddress(task.TokenAddress)
+	if strings.TrimSpace(task.IndexSource) == "" {
+		task.IndexSource = OnchainIndexSourceFreeLocal
+	}
+	if strings.TrimSpace(task.Status) == "" {
+		task.Status = OnchainJobStatusQueued
+	}
+	return s.db.Clauses(clause.OnConflict{
+		Columns: []clause.Column{{Name: "chain"}, {Name: "token_address"}},
+		DoUpdates: clause.AssignmentColumns([]string{
+			"enabled", "index_source", "start_block", "last_block", "status", "last_error", "progress_message", "updated_at",
+		}),
+	}).Create(task).Error
+}
+
+func (s *OnchainStore) GetLocalIndexTask(chain, tokenAddress string) (*OnchainLocalIndexTask, error) {
+	var task OnchainLocalIndexTask
+	err := s.db.Where("chain = ? AND token_address = ?", normalizeChain(chain), normalizeAddress(tokenAddress)).First(&task).Error
+	if err == gorm.ErrRecordNotFound {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &task, nil
+}
+
+func (s *OnchainStore) ListEnabledLocalIndexTasks() ([]OnchainLocalIndexTask, error) {
+	var tasks []OnchainLocalIndexTask
+	err := s.db.Where("enabled = ? AND status IN ?", true, []string{OnchainJobStatusQueued, OnchainJobStatusIndexing}).
+		Order("updated_at ASC").Find(&tasks).Error
+	return tasks, err
 }
 
 func (s *OnchainStore) GetJob(chain, tokenAddress string) (*OnchainIndexJob, error) {
@@ -366,6 +437,77 @@ func (s *OnchainStore) ListSwaps(chain, tokenAddress string) ([]OnchainSwap, err
 		Order("block_number ASC, log_index ASC").
 		Find(&swaps).Error
 	return swaps, err
+}
+
+func (s *OnchainStore) CountEarlyBuyWallets(chain, tokenAddress string, limit int) (int64, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	type earlyBuyWallet struct {
+		TraderAddress string
+	}
+	var wallets []earlyBuyWallet
+	err := s.db.Model(&OnchainSwap{}).
+		Select("trader_address").
+		Where("chain = ? AND token_address = ? AND side = ? AND trader_address <> ''",
+			normalizeChain(chain), normalizeAddress(tokenAddress), "buy").
+		Group("trader_address").
+		Order("min(block_number) ASC, min(log_index) ASC").
+		Limit(limit).
+		Find(&wallets).Error
+	return int64(len(wallets)), err
+}
+
+func (s *OnchainStore) ListEarlyBuyWallets(chain, tokenAddress string, limit int) ([]string, error) {
+	if limit <= 0 || limit > 500 {
+		limit = 100
+	}
+	type earlyBuyWallet struct {
+		TraderAddress string
+	}
+	var wallets []earlyBuyWallet
+	err := s.db.Model(&OnchainSwap{}).
+		Select("trader_address").
+		Where("chain = ? AND token_address = ? AND side = ? AND trader_address <> ''",
+			normalizeChain(chain), normalizeAddress(tokenAddress), "buy").
+		Group("trader_address").
+		Order("min(block_number) ASC, min(log_index) ASC").
+		Limit(limit).
+		Find(&wallets).Error
+	if err != nil {
+		return nil, err
+	}
+	out := make([]string, 0, len(wallets))
+	for _, wallet := range wallets {
+		address := normalizeAddress(wallet.TraderAddress)
+		if address != "" {
+			out = append(out, address)
+		}
+	}
+	return out, nil
+}
+
+func (s *OnchainStore) ListTransfersForAddresses(chain, tokenAddress string, addresses []string) ([]OnchainTokenTransfer, error) {
+	chain = normalizeChain(chain)
+	tokenAddress = normalizeAddress(tokenAddress)
+	cleanAddresses := make([]string, 0, len(addresses))
+	seen := map[string]bool{}
+	for _, address := range addresses {
+		address = normalizeAddress(address)
+		if address == "" || seen[address] {
+			continue
+		}
+		seen[address] = true
+		cleanAddresses = append(cleanAddresses, address)
+	}
+	if len(cleanAddresses) == 0 {
+		return nil, nil
+	}
+	var transfers []OnchainTokenTransfer
+	err := s.db.Where("chain = ? AND token_address = ? AND (from_address IN ? OR to_address IN ?)", chain, tokenAddress, cleanAddresses, cleanAddresses).
+		Order("block_number ASC, log_index ASC").
+		Find(&transfers).Error
+	return transfers, err
 }
 
 func (s *OnchainStore) RecomputeWalletSnapshots(chain, tokenAddress string) error {

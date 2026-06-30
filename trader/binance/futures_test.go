@@ -1,14 +1,17 @@
 package binance
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/adshao/go-binance/v2/common"
 	"github.com/adshao/go-binance/v2/futures"
 	"github.com/stretchr/testify/assert"
 	"nofx/trader/testutil"
@@ -24,6 +27,13 @@ import (
 type BinanceFuturesTestSuite struct {
 	*testutil.TraderTestSuite // Embeds base test suite
 	mockServer                *httptest.Server
+}
+
+func absInt64(v int64) int64 {
+	if v < 0 {
+		return -v
+	}
+	return v
 }
 
 // NewBinanceFuturesTestSuite Creates Binance Futures test suite
@@ -270,6 +280,7 @@ func NewBinanceFuturesTestSuite(t *testing.T) *BinanceFuturesTestSuite {
 	client := futures.NewClient("test_api_key", "test_secret_key")
 	client.BaseURL = mockServer.URL
 	client.HTTPClient = mockServer.Client()
+	installBinanceRateLimitTransport(&client.HTTPClient)
 
 	// Create FuturesTrader
 	traderInstance := &FuturesTrader{
@@ -353,7 +364,7 @@ func TestNewFuturesTrader(t *testing.T) {
 
 	assert.NotNil(t, t1)
 	assert.NotNil(t, t1.client)
-	assert.Equal(t, 15*time.Second, t1.cacheDuration)
+	assert.Equal(t, 60*time.Second, t1.cacheDuration)
 }
 
 func TestNewFuturesClientSelectsNetworkEndpoint(t *testing.T) {
@@ -362,6 +373,111 @@ func TestNewFuturesClientSelectsNetworkEndpoint(t *testing.T) {
 
 	testnetClient := newFuturesClient("test_api_key", "test_secret_key", true)
 	assert.Equal(t, futures.BaseApiTestnetUrl, testnetClient.BaseURL)
+}
+
+func TestGetBalanceUsesWideRecvWindow(t *testing.T) {
+	resetBinanceRateLimitForTest()
+
+	var gotRecvWindow string
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/fapi/v2/account" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		gotRecvWindow = r.URL.Query().Get("recvWindow")
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"totalWalletBalance":          "100.00",
+			"availableBalance":            "95.00",
+			"totalUnrealizedProfit":       "5.00",
+			"totalInitialMargin":          "0",
+			"totalMaintMargin":            "0",
+			"totalMarginBalance":          "100.00",
+			"totalPositionInitialMargin":  "0",
+			"totalOpenOrderInitialMargin": "0",
+			"totalCrossWalletBalance":     "100.00",
+			"totalCrossUnPnl":             "0",
+			"maxWithdrawAmount":           "95.00",
+			"assets":                      []interface{}{},
+			"positions":                   []interface{}{},
+		})
+	}))
+	defer mockServer.Close()
+
+	client := futures.NewClient("test_api_key", "test_secret_key")
+	client.BaseURL = mockServer.URL
+	client.HTTPClient = mockServer.Client()
+	installBinanceRateLimitTransport(&client.HTTPClient)
+	traderInstance := &FuturesTrader{
+		client:        client,
+		cacheDuration: 0,
+	}
+
+	_, err := traderInstance.GetBalance()
+	assert.NoError(t, err)
+	assert.Equal(t, "60000", gotRecvWindow)
+}
+
+func TestBinanceRateLimitCooldownBlocksBalanceRequest(t *testing.T) {
+	resetBinanceRateLimitForTest()
+	defer resetBinanceRateLimitForTest()
+
+	banUntil := time.Now().Add(90 * time.Second).UnixMilli()
+	err := recordBinanceAPIError(&common.APIError{
+		Code:    -1003,
+		Message: fmt.Sprintf("Way too many requests; IP(8.219.206.21) banned until %d. Please use the websocket for live updates to avoid bans.", banUntil),
+	})
+	assert.Error(t, err)
+
+	var hits atomic.Int32
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer mockServer.Close()
+
+	client := futures.NewClient("test_api_key", "test_secret_key")
+	client.BaseURL = mockServer.URL
+	client.HTTPClient = mockServer.Client()
+	installBinanceRateLimitTransport(&client.HTTPClient)
+	traderInstance := &FuturesTrader{
+		client:        client,
+		cacheDuration: 0,
+	}
+
+	_, err = traderInstance.GetBalance()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "rate-limit cooldown active")
+	assert.Equal(t, int32(0), hits.Load())
+}
+
+func TestSyncBinanceServerTimeUsesLowestRTTSample(t *testing.T) {
+	nowMs := time.Now().UnixMilli()
+	var calls atomic.Int32
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/fapi/v1/time" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		call := calls.Add(1)
+		if call == 1 {
+			time.Sleep(80 * time.Millisecond)
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"serverTime": nowMs - 35000})
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"serverTime": time.Now().UnixMilli()})
+	}))
+	defer mockServer.Close()
+
+	client := futures.NewClient("test_api_key", "test_secret_key")
+	client.BaseURL = mockServer.URL
+	client.HTTPClient = mockServer.Client()
+
+	syncBinanceServerTime(client)
+	assert.Less(t, absInt64(client.TimeOffset), int64(5000))
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	_, err := client.NewServerTimeService().Do(ctx)
+	assert.NoError(t, err)
 }
 
 // TestCalculatePositionSize tests position size calculation

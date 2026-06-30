@@ -2,12 +2,15 @@ package api
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"nofx/auth"
@@ -38,6 +41,87 @@ type onchainAIReportAgentConfig struct {
 	Focus             string `json:"focus"`
 	CustomPrompt      string `json:"custom_prompt"`
 	IncludeRawSignals bool   `json:"include_raw_signals"`
+}
+
+type onchainAIReportJobStatus string
+
+const (
+	onchainAIReportJobQueued    onchainAIReportJobStatus = "queued"
+	onchainAIReportJobRunning   onchainAIReportJobStatus = "running"
+	onchainAIReportJobCompleted onchainAIReportJobStatus = "completed"
+	onchainAIReportJobFailed    onchainAIReportJobStatus = "failed"
+)
+
+type onchainAIReportJob struct {
+	ID          string
+	UserID      string
+	Status      onchainAIReportJobStatus
+	ModelID     string
+	ModelName   string
+	Chain       string
+	Address     string
+	Depth       string
+	Report      string
+	Error       string
+	ErrorParams map[string]string
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+	CompletedAt time.Time
+}
+
+type onchainAIReportJobStore struct {
+	mu   sync.Mutex
+	jobs map[string]*onchainAIReportJob
+}
+
+func newOnchainAIReportJobStore() *onchainAIReportJobStore {
+	return &onchainAIReportJobStore{jobs: map[string]*onchainAIReportJob{}}
+}
+
+func (s *onchainAIReportJobStore) create(job *onchainAIReportJob) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.pruneLocked(time.Now())
+	s.jobs[job.ID] = job
+}
+
+func (s *onchainAIReportJobStore) get(id string) (*onchainAIReportJob, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.pruneLocked(time.Now())
+	job, ok := s.jobs[id]
+	if !ok {
+		return nil, false
+	}
+	copy := *job
+	if job.ErrorParams != nil {
+		copy.ErrorParams = map[string]string{}
+		for key, value := range job.ErrorParams {
+			copy.ErrorParams[key] = value
+		}
+	}
+	return &copy, true
+}
+
+func (s *onchainAIReportJobStore) update(id string, update func(*onchainAIReportJob)) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if job, ok := s.jobs[id]; ok {
+		update(job)
+		job.UpdatedAt = time.Now()
+	}
+}
+
+func (s *onchainAIReportJobStore) pruneLocked(now time.Time) {
+	for id, job := range s.jobs {
+		ttl := 30 * time.Minute
+		if job.Status == onchainAIReportJobCompleted || job.Status == onchainAIReportJobFailed {
+			ttl = 10 * time.Minute
+		}
+		if now.Sub(job.UpdatedAt) > ttl {
+			delete(s.jobs, id)
+		}
+	}
 }
 
 func (s *Server) handleOnchainAIReportPreview(c *gin.Context) {
@@ -172,23 +256,118 @@ func (s *Server) handleOnchainAIReport(c *gin.Context) {
 		})
 	}
 
-	report, err := s.generateOnchainAIReport(c.Request.Context(), model, req.Language, req.Agent, analysis, walletGraph)
-	if err != nil {
-		publicMsg, params := describeOnchainAIReportError(model, err)
-		SafeErrorWithDetails(c, http.StatusBadGateway, publicMsg, "onchain.ai_report.failed", params, err)
+	if strings.EqualFold(c.Query("sync"), "1") || strings.EqualFold(c.Query("mode"), "sync") {
+		report, err := s.generateOnchainAIReport(c.Request.Context(), model, req.Language, req.Agent, analysis, walletGraph)
+		if err != nil {
+			publicMsg, params := describeOnchainAIReportError(model, err)
+			SafeErrorWithDetails(c, http.StatusBadGateway, publicMsg, "onchain.ai_report.failed", params, err)
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"success":      true,
+			"chain":        analysis.Chain,
+			"address":      analysis.Address,
+			"depth":        analysis.Depth,
+			"model_id":     model.ID,
+			"model_name":   modelNameForReport(model),
+			"generated_at": time.Now().UTC().Format(time.RFC3339),
+			"report":       report,
+		})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success":      true,
-		"chain":        analysis.Chain,
-		"address":      analysis.Address,
-		"depth":        analysis.Depth,
-		"model_id":     model.ID,
-		"model_name":   modelNameForReport(model),
-		"generated_at": time.Now().UTC().Format(time.RFC3339),
-		"report":       report,
+	jobID := newOnchainAIReportJobID()
+	now := time.Now()
+	s.onchainAIReports.create(&onchainAIReportJob{
+		ID:        jobID,
+		UserID:    userID,
+		Status:    onchainAIReportJobQueued,
+		ModelID:   model.ID,
+		ModelName: modelNameForReport(model),
+		Chain:     analysis.Chain,
+		Address:   analysis.Address,
+		Depth:     analysis.Depth,
+		CreatedAt: now,
+		UpdatedAt: now,
 	})
+
+	go s.runOnchainAIReportJob(jobID, model, req.Language, req.Agent, analysis, walletGraph)
+
+	c.JSON(http.StatusAccepted, gin.H{
+		"success":       true,
+		"status":        onchainAIReportJobQueued,
+		"job_id":        jobID,
+		"chain":         analysis.Chain,
+		"address":       analysis.Address,
+		"depth":         analysis.Depth,
+		"model_id":      model.ID,
+		"model_name":    modelNameForReport(model),
+		"poll_after_ms": 3000,
+		"message":       "AI report generation queued",
+	})
+}
+
+func (s *Server) handleOnchainAIReportJob(c *gin.Context) {
+	jobID := strings.TrimSpace(c.Param("job_id"))
+	job, ok := s.onchainAIReports.get(jobID)
+	if !ok {
+		c.JSON(http.StatusNotFound, gin.H{"success": false, "status": "not_found", "error": "AI report job not found or expired"})
+		return
+	}
+	body := gin.H{
+		"success":    job.Status != onchainAIReportJobFailed,
+		"job_id":     job.ID,
+		"status":     job.Status,
+		"chain":      job.Chain,
+		"address":    job.Address,
+		"depth":      job.Depth,
+		"model_id":   job.ModelID,
+		"model_name": job.ModelName,
+		"created_at": job.CreatedAt.UTC().Format(time.RFC3339),
+		"updated_at": job.UpdatedAt.UTC().Format(time.RFC3339),
+	}
+	switch job.Status {
+	case onchainAIReportJobCompleted:
+		body["generated_at"] = job.CompletedAt.UTC().Format(time.RFC3339)
+		body["report"] = job.Report
+	case onchainAIReportJobFailed:
+		body["error"] = job.Error
+		body["error_params"] = job.ErrorParams
+	default:
+		body["poll_after_ms"] = 3000
+	}
+	c.JSON(http.StatusOK, body)
+}
+
+func (s *Server) runOnchainAIReportJob(jobID string, model *store.AIModel, language string, agentConfig onchainAIReportAgentConfig, analysis *onchain.TokenAnalysisResponse, walletGraph *onchain.WalletGraphResponse) {
+	s.onchainAIReports.update(jobID, func(job *onchainAIReportJob) {
+		job.Status = onchainAIReportJobRunning
+	})
+	report, err := s.generateOnchainAIReport(context.Background(), model, language, agentConfig, analysis, walletGraph)
+	if err != nil {
+		publicMsg, params := describeOnchainAIReportError(model, err)
+		s.onchainAIReports.update(jobID, func(job *onchainAIReportJob) {
+			job.Status = onchainAIReportJobFailed
+			job.Error = publicMsg
+			job.ErrorParams = params
+			job.CompletedAt = time.Now()
+		})
+		return
+	}
+	s.onchainAIReports.update(jobID, func(job *onchainAIReportJob) {
+		job.Status = onchainAIReportJobCompleted
+		job.Report = report
+		job.CompletedAt = time.Now()
+	})
+}
+
+func newOnchainAIReportJobID() string {
+	var buf [16]byte
+	if _, err := rand.Read(buf[:]); err == nil {
+		return "air_" + hex.EncodeToString(buf[:])
+	}
+	return fmt.Sprintf("air_%d", time.Now().UnixNano())
 }
 
 func authenticatedOrDefaultUserID(c *gin.Context) string {
@@ -245,9 +424,12 @@ func validateAIReportModel(model *store.AIModel) (*store.AIModel, error) {
 }
 
 func (s *Server) generateOnchainAIReport(ctx context.Context, model *store.AIModel, language string, agentConfig onchainAIReportAgentConfig, analysis *onchain.TokenAnalysisResponse, walletGraph *onchain.WalletGraphResponse) (string, error) {
-	client := mcp.NewAIClientByProvider(strings.ToLower(strings.TrimSpace(model.Provider)))
+	reportCtx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
+	defer cancel()
+
+	client := mcp.NewAIClientByProvider(strings.ToLower(strings.TrimSpace(model.Provider)), mcp.WithTimeout(180*time.Second), mcp.WithMaxTokens(1800))
 	if client == nil {
-		client = mcp.NewClient(mcp.WithTimeout(90*time.Second), mcp.WithMaxTokens(1800))
+		client = mcp.NewClient(mcp.WithTimeout(180*time.Second), mcp.WithMaxTokens(1800))
 	}
 	client.SetAPIKey(
 		strings.TrimSpace(string(model.APIKey)),
@@ -262,7 +444,7 @@ func (s *Server) generateOnchainAIReport(ctx context.Context, model *store.AIMod
 	temp := 0.2
 	maxTokens := 1800
 	return client.CallWithRequest(&mcp.Request{
-		Ctx: ctx,
+		Ctx: reportCtx,
 		Messages: []mcp.Message{
 			mcp.NewSystemMessage(systemPrompt),
 			mcp.NewUserMessage(userPrompt),

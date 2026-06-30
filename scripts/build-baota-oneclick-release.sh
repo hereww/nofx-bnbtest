@@ -20,6 +20,7 @@ copy_tree() {
       --exclude='.git/' \
       --exclude='.github/' \
       --exclude='.DS_Store' \
+      --exclude='.tmp_*' \
       --exclude='release/' \
       --exclude='web/node_modules/' \
       --exclude='web/dist/' \
@@ -39,6 +40,7 @@ copy_tree() {
       --exclude='.git' \
       --exclude='.github' \
       --exclude='.DS_Store' \
+      --exclude='.tmp_*' \
       --exclude='release' \
       --exclude='web/node_modules' \
       --exclude='web/dist' \
@@ -74,7 +76,8 @@ cat >"$ONECLICK_PATH" <<SCRIPT_HEADER
 set -euo pipefail
 
 APP_DIR="\${APP_DIR:-/www/wwwroot/nofx}"
-ONCHAIN_HTTP_PROXY="\${ONCHAIN_HTTP_PROXY:-http://fanqiang123:fanqiang123@hereww.i234.me:10811}"
+DEPLOY_HTTP_PROXY="\${DEPLOY_HTTP_PROXY:-\${ONCHAIN_HTTP_PROXY:-}}"
+ONCHAIN_BSC_ARCHIVE_RPC_URL="\${ONCHAIN_BSC_ARCHIVE_RPC_URL:-\${DEPLOY_ONCHAIN_BSC_ARCHIVE_RPC_URL:-}}"
 TMP_DIR="\$(mktemp -d /tmp/nofx-oneclick.XXXXXX)"
 PKG="\${TMP_DIR}/payload.tar.gz"
 PAYLOAD_BYTES="${payload_bytes}"
@@ -124,12 +127,14 @@ if [ "\${NOFX_EXTRACT_ONLY:-0}" = "1" ]; then
 fi
 
 export APP_DIR
-export ONCHAIN_HTTP_PROXY
+export DEPLOY_ONCHAIN_HTTP_PROXY="\$DEPLOY_HTTP_PROXY"
+export DEPLOY_MARKET_HTTP_PROXY="\${DEPLOY_MARKET_HTTP_PROXY:-\${MARKET_HTTP_PROXY:-\$DEPLOY_HTTP_PROXY}}"
+export ONCHAIN_BSC_ARCHIVE_RPC_URL
 export ONCHAIN_SMOKE_CHAIN="\${ONCHAIN_SMOKE_CHAIN:-bsc}"
 export ONCHAIN_SMOKE_ADDRESS="\${ONCHAIN_SMOKE_ADDRESS:-0x812fc5119b772c6c7a66249a559f3614623f4444}"
 
 log "Deploying to \${APP_DIR}"
-log "Using on-chain proxy: configured"
+log "Using outbound proxy: configured"
 mkdir -p "\$APP_DIR"
 tar -xzf "\$PKG" -C "\$APP_DIR"
 cd "\$APP_DIR"

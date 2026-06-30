@@ -23,9 +23,13 @@ func (t *FuturesTrader) GetPositions() ([]map[string]interface{}, error) {
 	t.positionsCacheMutex.RUnlock()
 
 	// Cache expired or doesn't exist, call API
+	if err := checkBinanceRateLimitCooldown(); err != nil {
+		return nil, err
+	}
 	logger.Infof("🔄 Cache expired, calling Binance API to get position information...")
-	positions, err := t.client.NewGetPositionRiskService().Do(context.Background())
+	positions, err := t.client.NewGetPositionRiskService().Do(context.Background(), futures.WithRecvWindow(binanceRecvWindowMs))
 	if err != nil {
+		err = recordBinanceAPIError(err)
 		return nil, fmt.Errorf("failed to get positions: %w", err)
 	}
 
@@ -67,6 +71,10 @@ func (t *FuturesTrader) GetPositions() ([]map[string]interface{}, error) {
 
 // SetMarginMode sets margin mode
 func (t *FuturesTrader) SetMarginMode(symbol string, isCrossMargin bool) error {
+	if err := checkBinanceRateLimitCooldown(); err != nil {
+		return err
+	}
+
 	var marginType futures.MarginType
 	if isCrossMargin {
 		marginType = futures.MarginTypeCrossed
@@ -78,7 +86,7 @@ func (t *FuturesTrader) SetMarginMode(symbol string, isCrossMargin bool) error {
 	err := t.client.NewChangeMarginTypeService().
 		Symbol(symbol).
 		MarginType(marginType).
-		Do(context.Background())
+		Do(context.Background(), futures.WithRecvWindow(binanceRecvWindowMs))
 
 	marginModeStr := "Cross Margin"
 	if !isCrossMargin {
@@ -86,6 +94,7 @@ func (t *FuturesTrader) SetMarginMode(symbol string, isCrossMargin bool) error {
 	}
 
 	if err != nil {
+		err = recordBinanceAPIError(err)
 		// If error message contains "No need to change", margin mode is already set to target value
 		if contains(err.Error(), "No need to change margin type") {
 			logger.Infof("  ✓ %s margin mode is already %s", symbol, marginModeStr)
@@ -139,12 +148,16 @@ func (t *FuturesTrader) SetLeverage(symbol string, leverage int) error {
 	}
 
 	// Change leverage
+	if err := checkBinanceRateLimitCooldown(); err != nil {
+		return err
+	}
 	_, err = t.client.NewChangeLeverageService().
 		Symbol(symbol).
 		Leverage(leverage).
-		Do(context.Background())
+		Do(context.Background(), futures.WithRecvWindow(binanceRecvWindowMs))
 
 	if err != nil {
+		err = recordBinanceAPIError(err)
 		// If error message contains "No need to change", leverage is already the target value
 		if contains(err.Error(), "No need to change") {
 			logger.Infof("  ✓ %s leverage is already %dx", symbol, leverage)
@@ -164,8 +177,13 @@ func (t *FuturesTrader) SetLeverage(symbol string, leverage int) error {
 
 // GetMarketPrice gets market price
 func (t *FuturesTrader) GetMarketPrice(symbol string) (float64, error) {
+	if err := checkBinanceRateLimitCooldown(); err != nil {
+		return 0, err
+	}
+
 	prices, err := t.client.NewListPricesService().Symbol(symbol).Do(context.Background())
 	if err != nil {
+		err = recordBinanceAPIError(err)
 		return 0, fmt.Errorf("failed to get price: %w", err)
 	}
 
@@ -287,4 +305,3 @@ func (t *FuturesTrader) FormatPrice(symbol string, price float64) (string, error
 	format := fmt.Sprintf("%%.%df", precision)
 	return fmt.Sprintf(format, price), nil
 }
-

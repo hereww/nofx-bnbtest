@@ -113,9 +113,9 @@ type AutoTraderConfig struct {
 	QwenKey     string
 
 	// Custom AI API configuration
-	CustomAPIURL     string
-	CustomAPIKey     string
-	CustomModelName  string
+	CustomAPIURL    string
+	CustomAPIKey    string
+	CustomModelName string
 
 	// Scan configuration
 	ScanInterval time.Duration // Scan interval (recommended 3 minutes)
@@ -334,7 +334,7 @@ func NewAutoTrader(config AutoTraderConfig, st *store.Store, userID string) (*Au
 				}
 			}
 		} else {
-			return nil, fmt.Errorf("initial balance must be greater than 0, please set InitialBalance in config or ensure exchange account has balance")
+			logger.Infof("⚠️ [%s] Exchange returned no positive balance; starting with initial balance 0. Opening orders will still be limited by real available balance.", config.Name)
 		}
 	}
 
@@ -451,8 +451,8 @@ func (at *AutoTrader) Run() error {
 	// Start Binance order sync if using Binance exchange
 	if at.exchange == "binance" {
 		if binanceTrader, ok := at.trader.(*binance.FuturesTrader); ok && at.store != nil {
-			binanceTrader.StartOrderSync(at.id, at.exchangeID, at.exchange, at.store, 30*time.Second)
-			at.logInfof("🔄 Binance order+position sync enabled (every 30s)")
+			binanceTrader.StartOrderSync(at.id, at.exchangeID, at.exchange, at.store, 2*time.Minute)
+			at.logInfof("🔄 Binance order+position sync enabled (every 2m)")
 		}
 	}
 

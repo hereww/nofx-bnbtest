@@ -3,6 +3,7 @@ package onchain
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -22,39 +23,70 @@ import (
 )
 
 const (
-	StatusOK                = "ok"
-	StatusPartialData       = "partial_data"
-	StatusIndexing          = "indexing"
-	StatusArchiveRPCMissing = "archive_rpc_missing"
-	StatusIndexRequired     = "index_required"
-	StatusInvalidRequest    = "invalid_request"
+	StatusOK                    = "ok"
+	StatusPartialData           = "partial_data"
+	StatusIndexing              = "indexing"
+	StatusIndexerUnavailable    = "indexer_unavailable"
+	StatusArchiveRPCMissing     = "archive_rpc_missing"
+	StatusArchiveRPCUnsupported = "archive_rpc_unsupported"
+	StatusIndexRequired         = "index_required"
+	StatusInvalidRequest        = "invalid_request"
 
 	DepthRecent = "recent"
 	DepthFull   = "full"
 
 	bscChainID = "56"
+
+	defaultEarlyWalletIndexWindowBlocks = int64(100000)
+
+	PhaseDiscoveringPools = "discovering_pools"
+	PhaseScanningSeeds    = "scanning_seed_window"
+	PhaseEnrichingWallets = "enriching_wallets"
+	PhaseCompleted        = "completed"
 )
 
 var evmAddressPattern = regexp.MustCompile(`^0x[0-9a-fA-F]{40}$`)
 
 type Service struct {
-	store      *store.Store
-	httpClient *http.Client
-	mu         sync.Mutex
-	running    map[string]bool
+	store         *store.Store
+	httpClient    *http.Client
+	rpcHTTPClient *http.Client
+	freeLogs      *freeLogsClient
+	mu            sync.Mutex
+	running       map[string]bool
 }
 
 func NewService(st *store.Store) *Service {
-	httpClient, err := netclient.NewProxyAwareHTTPClient(20*time.Second, config.Get().MarketHTTPProxy)
-	if err != nil {
-		logger.Warnf("invalid onchain HTTP proxy ignored: %v", err)
-		httpClient = &http.Client{Timeout: 20 * time.Second}
+	marketProxy := strings.TrimSpace(config.Get().MarketHTTPProxy)
+	var httpClient *http.Client
+	var err error
+	if marketProxy == "" {
+		httpClient = netclient.NewDirectHTTPClient(20 * time.Second)
+	} else {
+		httpClient, err = netclient.NewProxyAwareHTTPClient(20*time.Second, marketProxy)
+		if err != nil {
+			logger.Warnf("invalid onchain HTTP proxy ignored: %v", err)
+			httpClient = netclient.NewDirectHTTPClient(20 * time.Second)
+		}
 	}
-	return &Service{
-		store:      st,
-		httpClient: httpClient,
-		running:    make(map[string]bool),
+	var rpcHTTPClient *http.Client
+	if strings.TrimSpace(config.Get().OnchainArchiveHTTPProxy) == "" {
+		rpcHTTPClient = netclient.NewDirectHTTPClient(60 * time.Second)
+	} else {
+		rpcHTTPClient, err = netclient.NewProxyAwareHTTPClient(60*time.Second, config.Get().OnchainArchiveHTTPProxy)
+		if err != nil {
+			logger.Warnf("invalid onchain archive HTTP proxy ignored: %v", err)
+			rpcHTTPClient = netclient.NewDirectHTTPClient(60 * time.Second)
+		}
 	}
+	svc := &Service{
+		store:         st,
+		httpClient:    httpClient,
+		rpcHTTPClient: rpcHTTPClient,
+		running:       make(map[string]bool),
+	}
+	svc.freeLogs = svc.newFreeLogsClient()
+	return svc
 }
 
 func (s *Service) AnalyzeToken(ctx context.Context, req TokenAnalysisRequest) (*TokenAnalysisResponse, error) {
@@ -124,8 +156,13 @@ func (s *Service) AnalyzeToken(ctx context.Context, req TokenAnalysisRequest) (*
 func (s *Service) QueueIndex(ctx context.Context, req IndexTokenRequest) (*IndexStatusResponse, error) {
 	chain := normalizeChain(req.Chain)
 	address := normalizeAddress(req.Address)
+	scope := normalizeIndexScope(req.Scope)
+	indexSource := normalizeIndexSource(req.IndexSource, scope)
 	if err := validateRequest(chain, address); err != nil {
-		return &IndexStatusResponse{Success: false, Chain: chain, Address: address, Status: StatusInvalidRequest, ErrorMessage: err.Error()}, nil
+		return &IndexStatusResponse{Success: false, Chain: chain, Address: address, Status: StatusInvalidRequest, Scope: scope, IndexSource: indexSource, ErrorMessage: err.Error()}, nil
+	}
+	if indexSource == store.OnchainIndexSourceFreeLocal {
+		return s.queueFreeLocalEarlyIndex(ctx, chain, address, req)
 	}
 	if strings.TrimSpace(config.Get().OnchainBSCArchiveRPCURL) == "" {
 		return &IndexStatusResponse{
@@ -133,6 +170,8 @@ func (s *Service) QueueIndex(ctx context.Context, req IndexTokenRequest) (*Index
 			Chain:        chain,
 			Address:      address,
 			Status:       StatusArchiveRPCMissing,
+			Scope:        scope,
+			IndexSource:  indexSource,
 			Message:      "ONCHAIN_BSC_ARCHIVE_RPC_URL is required for full-history indexing.",
 			ErrorMessage: "archive RPC missing",
 		}, nil
@@ -141,6 +180,11 @@ func (s *Service) QueueIndex(ctx context.Context, req IndexTokenRequest) (*Index
 	startBlock := req.StartBlock
 	if startBlock == 0 {
 		pools, _ := s.discoverPools(ctx, chain, address)
+		if len(pools) > 0 {
+			if err := s.populatePoolCreatedBlocks(ctx, pools); err != nil {
+				logger.Warnf("onchain pool created block lookup failed for %s: %v", address, err)
+			}
+		}
 		for _, pool := range pools {
 			if pool.CreatedBlock > 0 && (startBlock == 0 || pool.CreatedBlock < startBlock) {
 				startBlock = pool.CreatedBlock
@@ -163,34 +207,147 @@ func (s *Service) QueueIndex(ctx context.Context, req IndexTokenRequest) (*Index
 
 	endBlock := req.EndBlock
 	if endBlock == 0 {
-		latest, err := s.rpcBlockNumber(ctx)
-		if err != nil {
-			return nil, err
+		if scope == store.OnchainIndexScopeEarlyWalletWindow {
+			window := config.Get().OnchainEarlyWindowBlocks
+			if window <= 0 {
+				window = defaultEarlyWalletIndexWindowBlocks
+			}
+			endBlock = startBlock + window - 1
+		} else {
+			latest, err := s.rpcBlockNumber(ctx)
+			if err != nil {
+				return nil, err
+			}
+			endBlock = latest
 		}
-		endBlock = latest
+	}
+	if endBlock < startBlock {
+		endBlock = startBlock
 	}
 	now := time.Now().UTC().UnixMilli()
 	job := &store.OnchainIndexJob{
-		Chain:         chain,
-		TokenAddress:  address,
-		Status:        store.OnchainJobStatusQueued,
-		StartBlock:    startBlock,
-		EndBlock:      endBlock,
-		LastBlock:     startBlock - 1,
-		BatchSize:     config.Get().OnchainIndexerBatchBlocks,
-		StartedAtMS:   now,
-		UpdatedAtMS:   now,
-		ErrorMessage:  "",
-		CompletedAtMS: 0,
+		Chain:           chain,
+		TokenAddress:    address,
+		Status:          store.OnchainJobStatusQueued,
+		Scope:           scope,
+		IndexSource:     indexSource,
+		Phase:           PhaseScanningSeeds,
+		Provider:        freeLogsProviderName(s.freeLogs),
+		RequestBudget:   freeLogsBudgetRemaining(s.freeLogs),
+		ProgressMessage: "Archive RPC index queued.",
+		StartBlock:      startBlock,
+		EndBlock:        endBlock,
+		LastBlock:       startBlock - 1,
+		BatchSize:       config.Get().OnchainIndexerBatchBlocks,
+		StartedAtMS:     now,
+		UpdatedAtMS:     now,
+		ErrorMessage:    "",
+		CompletedAtMS:   0,
 	}
 	if existing, _ := s.store.Onchain().GetJob(chain, address); existing != nil && existing.LastBlock >= startBlock {
-		job.LastBlock = existing.LastBlock
+		if existing.LastBlock > endBlock {
+			job.LastBlock = endBlock
+		} else {
+			job.LastBlock = existing.LastBlock
+		}
 	}
 	if err := s.store.Onchain().UpsertJob(job); err != nil {
 		return nil, err
 	}
-	s.StartJob(ctx, chain, address)
+	_ = s.markTokenIndexStatus(chain, address, store.OnchainJobStatusIndexing, now)
+	s.StartJob(context.Background(), chain, address)
 	return s.IndexStatus(chain, address)
+}
+
+func (s *Service) queueFreeLocalEarlyIndex(ctx context.Context, chain, address string, req IndexTokenRequest) (*IndexStatusResponse, error) {
+	if !config.Get().OnchainFreeIndexerEnabled {
+		return &IndexStatusResponse{
+			Success:      false,
+			Chain:        chain,
+			Address:      address,
+			Status:       StatusArchiveRPCMissing,
+			Scope:        store.OnchainIndexScopeEarlyWalletWindow,
+			IndexSource:  store.OnchainIndexSourceFreeLocal,
+			Message:      "ONCHAIN_FREE_INDEXER_ENABLED is false; enable it to use free local early-wallet indexing.",
+			ErrorMessage: "free local indexer disabled",
+		}, nil
+	}
+	startBlock := req.StartBlock
+	endBlock := req.EndBlock
+	progress := "Free local early-wallet index queued; historical backfill may be slow."
+	if endBlock < startBlock {
+		endBlock = 0
+	}
+	now := time.Now().UTC().UnixMilli()
+	if err := s.store.Onchain().UpsertLocalIndexTask(&store.OnchainLocalIndexTask{
+		Chain:           chain,
+		TokenAddress:    address,
+		Enabled:         true,
+		IndexSource:     store.OnchainIndexSourceFreeLocal,
+		StartBlock:      startBlock,
+		LastBlock:       0,
+		Status:          store.OnchainJobStatusQueued,
+		LastError:       "",
+		ProgressMessage: progress,
+	}); err != nil {
+		return nil, err
+	}
+	job := &store.OnchainIndexJob{
+		Chain:           chain,
+		TokenAddress:    address,
+		Status:          store.OnchainJobStatusQueued,
+		Scope:           store.OnchainIndexScopeEarlyWalletWindow,
+		IndexSource:     store.OnchainIndexSourceFreeLocal,
+		Phase:           PhaseScanningSeeds,
+		Provider:        freeSeedProviderName(s.freeLogs),
+		RequestBudget:   freeLogsBudgetRemaining(s.freeLogs),
+		ProgressMessage: progress,
+		StartBlock:      startBlock,
+		EndBlock:        endBlock,
+		LastBlock:       0,
+		BatchSize:       config.Get().OnchainIndexerBatchBlocks,
+		StartedAtMS:     now,
+		UpdatedAtMS:     now,
+		ErrorMessage:    "",
+		CompletedAtMS:   0,
+	}
+	if startBlock > 0 {
+		job.LastBlock = startBlock - 1
+	}
+	if existing, _ := s.store.Onchain().GetJob(chain, address); existing != nil && existing.IndexSource == store.OnchainIndexSourceFreeLocal && req.StartBlock > 0 {
+		if existing.StartBlock > 0 && job.StartBlock == 0 {
+			job.StartBlock = existing.StartBlock
+		}
+	}
+	if err := s.store.Onchain().UpsertJob(job); err != nil {
+		return nil, err
+	}
+	_ = s.markTokenIndexStatus(chain, address, store.OnchainJobStatusIndexing, now)
+	s.StartJob(context.Background(), chain, address)
+	return s.IndexStatus(chain, address)
+}
+
+func normalizeIndexScope(scope string) string {
+	switch strings.ToLower(strings.TrimSpace(scope)) {
+	case store.OnchainIndexScopeEarlyWalletWindow:
+		return store.OnchainIndexScopeEarlyWalletWindow
+	default:
+		return store.OnchainIndexScopeFullHistory
+	}
+}
+
+func normalizeIndexSource(source, scope string) string {
+	switch strings.ToLower(strings.TrimSpace(source)) {
+	case store.OnchainIndexSourceArchiveRPC:
+		return store.OnchainIndexSourceArchiveRPC
+	case store.OnchainIndexSourceFreeLocal:
+		return store.OnchainIndexSourceFreeLocal
+	default:
+		if scope == store.OnchainIndexScopeEarlyWalletWindow {
+			return store.OnchainIndexSourceFreeLocal
+		}
+		return store.OnchainIndexSourceArchiveRPC
+	}
 }
 
 func (s *Service) IndexStatus(chain, address string) (*IndexStatusResponse, error) {
@@ -204,23 +361,32 @@ func (s *Service) IndexStatus(chain, address string) (*IndexStatusResponse, erro
 		return nil, err
 	}
 	if job == nil {
-		return &IndexStatusResponse{Success: true, Chain: chain, Address: address, Status: StatusIndexRequired, Message: "Token has not been indexed yet."}, nil
+		return &IndexStatusResponse{Success: true, Chain: chain, Address: address, Status: StatusIndexRequired, Scope: store.OnchainIndexScopeEarlyWalletWindow, IndexSource: store.OnchainIndexSourceFreeLocal, Message: "Token has not been indexed yet."}, nil
 	}
+	seedWallets, _ := s.store.Onchain().CountEarlyBuyWallets(chain, address, defaultEarlySeedCount)
 	return &IndexStatusResponse{
-		Success:      true,
-		Chain:        chain,
-		Address:      address,
-		Status:       job.Status,
-		StartBlock:   job.StartBlock,
-		EndBlock:     job.EndBlock,
-		LastBlock:    job.LastBlock,
-		UpdatedAtMS:  job.UpdatedAtMS,
-		ErrorMessage: job.ErrorMessage,
+		Success:                true,
+		Chain:                  chain,
+		Address:                address,
+		Status:                 job.Status,
+		Scope:                  job.Scope,
+		IndexSource:            job.IndexSource,
+		Phase:                  job.Phase,
+		Provider:               job.Provider,
+		RequestBudgetRemaining: job.RequestBudget,
+		ProgressMessage:        job.ProgressMessage,
+		StartBlock:             job.StartBlock,
+		EndBlock:               job.EndBlock,
+		LastBlock:              job.LastBlock,
+		SeedWallets:            seedWallets,
+		UpdatedAtMS:            job.UpdatedAtMS,
+		ErrorMessage:           job.ErrorMessage,
 	}, nil
 }
 
 func (s *Service) StartConfiguredJobs(ctx context.Context) {
-	if !config.Get().OnchainIndexerEnabled || strings.TrimSpace(config.Get().OnchainBSCArchiveRPCURL) == "" {
+	if (!config.Get().OnchainIndexerEnabled || strings.TrimSpace(config.Get().OnchainBSCArchiveRPCURL) == "") && !config.Get().OnchainFreeIndexerEnabled {
+		logger.Infof("onchain indexer disabled archive_enabled=%v archive_rpc_configured=%v free_enabled=%v", config.Get().OnchainIndexerEnabled, strings.TrimSpace(config.Get().OnchainBSCArchiveRPCURL) != "", config.Get().OnchainFreeIndexerEnabled)
 		return
 	}
 	safe.GoNamed("onchain-indexer", func() {
@@ -228,6 +394,8 @@ func (s *Service) StartConfiguredJobs(ctx context.Context) {
 		if interval <= 0 {
 			interval = 15 * time.Second
 		}
+		logger.Infof("onchain indexer started interval=%s", interval)
+		s.startActiveIndexJobs(ctx)
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 		for {
@@ -235,17 +403,55 @@ func (s *Service) StartConfiguredJobs(ctx context.Context) {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				jobs, err := s.store.Onchain().ListActiveJobs()
-				if err != nil {
-					logger.Warnf("onchain indexer list jobs failed: %v", err)
-					continue
-				}
-				for _, job := range jobs {
-					s.StartJob(ctx, job.Chain, job.TokenAddress)
-				}
+				s.startActiveIndexJobs(ctx)
 			}
 		}
 	})
+}
+
+func (s *Service) startActiveIndexJobs(ctx context.Context) {
+	jobs, err := s.store.Onchain().ListActiveJobs()
+	if err != nil {
+		logger.Warnf("onchain indexer list jobs failed: %v", err)
+		return
+	}
+	if config.Get().OnchainFreeIndexerEnabled {
+		tasks, err := s.store.Onchain().ListEnabledLocalIndexTasks()
+		if err != nil {
+			logger.Warnf("onchain indexer list local tasks failed: %v", err)
+		} else {
+			for _, task := range tasks {
+				job, _ := s.store.Onchain().GetJob(task.Chain, task.TokenAddress)
+				if job != nil && job.IndexSource == store.OnchainIndexSourceFreeLocal {
+					jobs = append(jobs, *job)
+					continue
+				}
+				jobs = append(jobs, store.OnchainIndexJob{
+					Chain:        task.Chain,
+					TokenAddress: task.TokenAddress,
+					Status:       task.Status,
+					Scope:        store.OnchainIndexScopeEarlyWalletWindow,
+					IndexSource:  store.OnchainIndexSourceFreeLocal,
+					StartBlock:   task.StartBlock,
+					LastBlock:    task.LastBlock,
+					ErrorMessage: task.LastError,
+					UpdatedAtMS:  time.Now().UTC().UnixMilli(),
+				})
+			}
+		}
+	}
+	if len(jobs) > 0 {
+		logger.Infof("onchain indexer scheduling %d active job(s)", len(jobs))
+	}
+	seen := map[string]bool{}
+	for _, job := range jobs {
+		key := normalizeChain(job.Chain) + ":" + normalizeAddress(job.TokenAddress)
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		s.StartJob(ctx, job.Chain, job.TokenAddress)
+	}
 }
 
 func (s *Service) StartJob(ctx context.Context, chain, address string) {
@@ -267,29 +473,79 @@ func (s *Service) StartJob(ctx context.Context, chain, address string) {
 		}()
 		if err := s.runIndexJob(ctx, chain, address); err != nil {
 			logger.Warnf("onchain index job failed for %s: %v", address, err)
-			job, _ := s.store.Onchain().GetJob(chain, address)
-			if job == nil {
-				job = &store.OnchainIndexJob{
-					Chain:        chain,
-					TokenAddress: address,
-				}
-			}
-			job.Status = store.OnchainJobStatusFailed
-			job.ErrorMessage = err.Error()
-			job.UpdatedAtMS = time.Now().UTC().UnixMilli()
-			_ = s.store.Onchain().UpsertJob(job)
-			token, _ := s.store.Onchain().GetToken(chain, address)
-			if token == nil {
-				token = &store.OnchainToken{Chain: chain, Address: address}
-			}
-			token.IndexStatus = store.OnchainJobStatusFailed
-			token.LastIndexedAt = job.UpdatedAtMS
-			if token.AnalysisCompleteness == "" {
-				token.AnalysisCompleteness = "partial"
-			}
-			_ = s.store.Onchain().UpsertToken(token)
+			_ = s.markIndexJobFailure(ctx, chain, address, err)
 		}
 	})
+}
+
+func (s *Service) markIndexJobFailure(_ context.Context, chain, address string, runErr error) error {
+	job, _ := s.store.Onchain().GetJob(chain, address)
+	if job == nil {
+		job = &store.OnchainIndexJob{
+			Chain:        chain,
+			TokenAddress: address,
+		}
+	}
+	job.UpdatedAtMS = time.Now().UTC().UnixMilli()
+	if errors.Is(runErr, errRPCRateLimited) || errors.Is(runErr, errFreeLogsBudgetExceeded) || errors.Is(runErr, errRPCPayloadTooLarge) || errors.Is(runErr, errRPCTransportRetryable) {
+		job.Status = store.OnchainJobStatusQueued
+		if errors.Is(runErr, errFreeLogsBudgetExceeded) {
+			job.ErrorMessage = "free logs daily budget exceeded; retrying"
+			job.ProgressMessage = "Free log request budget is exhausted; free local index will retry later."
+		} else if errors.Is(runErr, errRPCPayloadTooLarge) {
+			job.ErrorMessage = "rpc log range too large; retrying with smaller batches"
+			job.ProgressMessage = "Free RPC log range is too large; the early-window index will retry with smaller batches."
+			if job.BatchSize <= 0 || job.BatchSize > int(minIndexLogRangeBlocks) {
+				job.BatchSize = int(minIndexLogRangeBlocks)
+			}
+		} else if errors.Is(runErr, errRPCTransportRetryable) {
+			job.ErrorMessage = "rpc transport retrying: " + runErr.Error()
+			job.ProgressMessage = "Free RPC transport is temporarily unavailable; free local index will retry on the next tick."
+		} else {
+			job.ErrorMessage = "rpc rate limited; retrying"
+			job.ProgressMessage = "RPC rate limited; free local index will retry on the next tick."
+		}
+		if err := s.store.Onchain().UpsertJob(job); err != nil {
+			return err
+		}
+		if job.IndexSource == store.OnchainIndexSourceFreeLocal {
+			_ = s.store.Onchain().UpsertLocalIndexTask(&store.OnchainLocalIndexTask{
+				Chain:           chain,
+				TokenAddress:    address,
+				Enabled:         true,
+				IndexSource:     store.OnchainIndexSourceFreeLocal,
+				StartBlock:      job.StartBlock,
+				LastBlock:       job.LastBlock,
+				Status:          store.OnchainJobStatusQueued,
+				LastError:       job.ErrorMessage,
+				ProgressMessage: job.ProgressMessage,
+			})
+		}
+		return s.markTokenIndexStatus(chain, address, store.OnchainJobStatusIndexing, job.UpdatedAtMS)
+	}
+	job.Status = store.OnchainJobStatusFailed
+	if errors.Is(runErr, errRPCArchiveUnsupported) {
+		job.ErrorMessage = "archive rpc unsupported: current RPC plan does not allow historical eth_getLogs; upgrade the RPC plan or use an archive-capable BSC endpoint"
+	} else {
+		job.ErrorMessage = runErr.Error()
+	}
+	if err := s.store.Onchain().UpsertJob(job); err != nil {
+		return err
+	}
+	return s.markTokenIndexStatus(chain, address, store.OnchainJobStatusFailed, job.UpdatedAtMS)
+}
+
+func (s *Service) markTokenIndexStatus(chain, address, status string, updatedAtMS int64) error {
+	token, _ := s.store.Onchain().GetToken(chain, address)
+	if token == nil {
+		token = &store.OnchainToken{Chain: chain, Address: address}
+	}
+	token.IndexStatus = status
+	token.LastIndexedAt = updatedAtMS
+	if token.AnalysisCompleteness == "" {
+		token.AnalysisCompleteness = "partial"
+	}
+	return s.store.Onchain().UpsertToken(token)
 }
 
 func validateRequest(chain, address string) error {
@@ -317,6 +573,15 @@ func normalizeAddress(address string) string {
 func mergeRecent(dst *TokenAnalysisResponse, src *TokenAnalysisResponse) {
 	if src == nil {
 		return
+	}
+	if src.Status != "" && src.Status != StatusOK {
+		dst.Status = src.Status
+	}
+	if src.Completeness != "" && src.Completeness != "recent" {
+		dst.Completeness = src.Completeness
+	}
+	if src.Message != "" {
+		dst.Message = src.Message
 	}
 	if src.Token.Name != "" || src.Token.Symbol != "" {
 		dst.Token = src.Token

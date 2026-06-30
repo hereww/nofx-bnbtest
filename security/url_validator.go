@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 )
@@ -41,8 +42,8 @@ func init() {
 
 // SSRFError represents a Server-Side Request Forgery attempt
 type SSRFError struct {
-	URL     string
-	Reason  string
+	URL    string
+	Reason string
 }
 
 func (e *SSRFError) Error() string {
@@ -78,6 +79,51 @@ func isPrivateIP(ip net.IP) bool {
 	}
 
 	return false
+}
+
+func trustedProxyDialTargetsFromEnvironment() map[string]struct{} {
+	targets := make(map[string]struct{})
+	for _, key := range []string{
+		"HTTPS_PROXY", "HTTP_PROXY", "ALL_PROXY",
+		"https_proxy", "http_proxy", "all_proxy",
+	} {
+		raw := strings.TrimSpace(os.Getenv(key))
+		if raw == "" {
+			continue
+		}
+		proxyURL, err := url.Parse(raw)
+		if err != nil || proxyURL.Hostname() == "" {
+			continue
+		}
+		switch strings.ToLower(proxyURL.Scheme) {
+		case "http", "https", "socks5", "socks5h":
+		default:
+			continue
+		}
+
+		port := proxyURL.Port()
+		if port == "" {
+			switch strings.ToLower(proxyURL.Scheme) {
+			case "https":
+				port = "443"
+			case "socks5", "socks5h":
+				port = "1080"
+			default:
+				port = "80"
+			}
+		}
+		targets[net.JoinHostPort(strings.ToLower(proxyURL.Hostname()), port)] = struct{}{}
+	}
+	return targets
+}
+
+func isTrustedProxyDialTarget(addr string, trustedTargets map[string]struct{}) bool {
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return false
+	}
+	_, ok := trustedTargets[net.JoinHostPort(strings.ToLower(strings.TrimSuffix(host, ".")), port)]
+	return ok
 }
 
 // ValidateURL checks if a URL is safe to request (not pointing to internal networks)
@@ -160,9 +206,18 @@ func SafeHTTPClient(timeout time.Duration) *http.Client {
 		Timeout:   timeout,
 		KeepAlive: 30 * time.Second,
 	}
+	trustedProxyTargets := trustedProxyDialTargetsFromEnvironment()
 
 	transport := &http.Transport{
+		Proxy: http.ProxyFromEnvironment,
 		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+			// Proxy endpoints come from the administrator-controlled process
+			// environment. They may legitimately live on a private Docker network.
+			// The requested and redirected upstream URLs remain SSRF-validated.
+			if isTrustedProxyDialTarget(addr, trustedProxyTargets) {
+				return dialer.DialContext(ctx, network, addr)
+			}
+
 			// Extract host from address
 			host, _, err := net.SplitHostPort(addr)
 			if err != nil {

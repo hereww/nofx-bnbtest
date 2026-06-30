@@ -11,15 +11,18 @@ import (
 
 // TelegramConfig stores the Telegram bot binding (single row, always ID=1)
 type TelegramConfig struct {
-	ID        uint      `gorm:"primaryKey"`
-	BotToken  string    `gorm:"column:bot_token"`
-	ChatID    int64     `gorm:"column:chat_id"`
-	Username  string    `gorm:"column:username"` // @username for display
-	BoundAt   time.Time `gorm:"column:bound_at"`
-	ModelID   string    `gorm:"column:model_id;default:''"` // AI model used for Telegram replies
-	Language  string    `gorm:"column:language;default:''"` // "zh" or "en"; empty = not chosen yet
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	ID          uint      `gorm:"primaryKey"`
+	BotToken    string    `gorm:"column:bot_token"`
+	ChatID      int64     `gorm:"column:chat_id"`
+	UserID      int64     `gorm:"column:user_id;default:0"`       // Telegram owner user ID
+	Username    string    `gorm:"column:username"`                // @username for display
+	GroupChatID int64     `gorm:"column:group_chat_id;default:0"` // Optional group/supergroup chat ID
+	GroupTitle  string    `gorm:"column:group_title;default:''"`
+	BoundAt     time.Time `gorm:"column:bound_at"`
+	ModelID     string    `gorm:"column:model_id;default:''"` // AI model used for Telegram replies
+	Language    string    `gorm:"column:language;default:''"` // "zh" or "en"; empty = not chosen yet
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
 }
 
 // String returns a safe string representation of TelegramConfig with the token masked.
@@ -28,21 +31,23 @@ func (tc TelegramConfig) String() string {
 	if tc.BotToken == "" {
 		token = "<not set>"
 	}
-	return fmt.Sprintf("TelegramConfig{ID:%d, ChatID:%d, Username:%q, BotToken:%s, BoundAt:%v}",
-		tc.ID, tc.ChatID, tc.Username, token, tc.BoundAt)
+	return fmt.Sprintf("TelegramConfig{ID:%d, ChatID:%d, UserID:%d, Username:%q, GroupChatID:%d, GroupTitle:%q, BotToken:%s, BoundAt:%v}",
+		tc.ID, tc.ChatID, tc.UserID, tc.Username, tc.GroupChatID, tc.GroupTitle, token, tc.BoundAt)
 }
 
 // TelegramConfigStore defines the interface for Telegram bot binding operations
 type TelegramConfigStore interface {
-	Get() (*TelegramConfig, error)                    // Get current config (may not exist)
-	SaveToken(botToken string) error                  // Save bot token only (Web UI sets this)
-	Save(botToken, modelID string) error              // Save bot token + selected AI model
-	BindUser(chatID int64, username string) error     // Called on first /start
-	IsBound() (bool, error)                           // Check if any user is bound
-	GetBoundChatID() (int64, error)                   // Get bound chat ID (0 if not bound)
-	Unbind() error                                    // Remove binding
-	SetLanguage(lang string) error                    // Set UI language ("en" or "zh")
-	GetLanguage() string                              // Get UI language; returns "en" if not set
+	Get() (*TelegramConfig, error)                        // Get current config (may not exist)
+	SaveToken(botToken string) error                      // Save bot token only (Web UI sets this)
+	Save(botToken, modelID string) error                  // Save bot token + selected AI model
+	BindUser(chatID, userID int64, username string) error // Called on first private /start
+	BindGroup(chatID, userID int64, title string) error   // Called by the bound owner from a group
+	UnbindGroup() error                                   // Remove only the group binding
+	IsBound() (bool, error)                               // Check if any user is bound
+	GetBoundChatID() (int64, error)                       // Get bound chat ID (0 if not bound)
+	Unbind() error                                        // Remove binding
+	SetLanguage(lang string) error                        // Set UI language ("en" or "zh")
+	GetLanguage() string                                  // Get UI language; returns "en" if not set
 }
 
 type telegramConfigStore struct {
@@ -87,7 +92,7 @@ func (s *telegramConfigStore) Save(botToken, modelID string) error {
 	return s.db.Save(&cfg).Error
 }
 
-func (s *telegramConfigStore) BindUser(chatID int64, username string) error {
+func (s *telegramConfigStore) BindUser(chatID, userID int64, username string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	var cfg TelegramConfig
@@ -97,9 +102,35 @@ func (s *telegramConfigStore) BindUser(chatID int64, username string) error {
 	}
 	cfg.ID = 1
 	cfg.ChatID = chatID
+	cfg.UserID = userID
 	cfg.Username = username
 	cfg.BoundAt = time.Now()
 	return s.db.Save(&cfg).Error
+}
+
+func (s *telegramConfigStore) BindGroup(chatID, userID int64, title string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var cfg TelegramConfig
+	result := s.db.First(&cfg, 1)
+	if result.Error != nil {
+		return result.Error
+	}
+	cfg.GroupChatID = chatID
+	cfg.GroupTitle = title
+	if cfg.UserID == 0 {
+		cfg.UserID = userID
+	}
+	return s.db.Save(&cfg).Error
+}
+
+func (s *telegramConfigStore) UnbindGroup() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.db.Model(&TelegramConfig{}).Where("id = 1").Updates(map[string]interface{}{
+		"group_chat_id": 0,
+		"group_title":   "",
+	}).Error
 }
 
 func (s *telegramConfigStore) IsBound() (bool, error) {
@@ -132,8 +163,11 @@ func (s *telegramConfigStore) Unbind() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.db.Model(&TelegramConfig{}).Where("id = 1").Updates(map[string]interface{}{
-		"chat_id":  0,
-		"username": "",
+		"chat_id":       0,
+		"user_id":       0,
+		"username":      "",
+		"group_chat_id": 0,
+		"group_title":   "",
 	}).Error
 }
 
