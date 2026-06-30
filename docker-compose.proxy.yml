@@ -1,0 +1,19 @@
+services:
+  nofx-proxy:
+    image: ghcr.io/sagernet/sing-box:latest
+    container_name: nofx-proxy
+    restart: unless-stopped
+    command: ["run", "-c", "/etc/sing-box/config.json"]
+    ports:
+      - "127.0.0.1:${NOFX_PROXY_PORT:-18080}:18080"
+    volumes:
+      - ./data/proxy/sing-box.json:/etc/sing-box/config.json:ro
+      - /etc/localtime:/etc/localtime:ro
+    networks:
+      - nofx-network
+    healthcheck:
+      test: ["CMD", "sing-box", "check", "-c", "/etc/sing-box/config.json"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s

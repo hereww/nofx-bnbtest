@@ -18,6 +18,7 @@ type mockLLM struct {
 	responses []*mcp.LLMResponse
 	calls     int
 	lastMsgs  []mcp.Message
+	lastReq   *mcp.Request
 }
 
 func (m *mockLLM) SetAPIKey(_, _, _ string)   {}
@@ -46,6 +47,7 @@ func (m *mockLLM) CallWithRequestStream(req *mcp.Request, onChunk func(string)) 
 
 func (m *mockLLM) CallWithRequestFull(req *mcp.Request) (*mcp.LLMResponse, error) {
 	m.lastMsgs = req.Messages
+	m.lastReq = req
 	return m.next()
 }
 
@@ -121,6 +123,45 @@ func TestAgentDirectReply(t *testing.T) {
 	}
 	if llm.calls != 1 {
 		t.Fatalf("expected 1 LLM call, got %d", llm.calls)
+	}
+}
+
+func TestReadOnlyAgentHasNoToolsOrAccountContext(t *testing.T) {
+	llm := &mockLLM{responses: []*mcp.LLMResponse{textReply("可以讨论风险管理。")}}
+	a := NewReadOnly(mockGetLLM(llm), BuildGroupGuestPrompt())
+
+	reply := a.Run("如何控制回撤？", nil)
+
+	if reply != "可以讨论风险管理。" {
+		t.Fatalf("unexpected reply: %q", reply)
+	}
+	if llm.lastReq == nil {
+		t.Fatal("expected an LLM request")
+	}
+	if len(llm.lastReq.Tools) != 0 {
+		t.Fatalf("read-only request exposed %d tools", len(llm.lastReq.Tools))
+	}
+	for _, msg := range llm.lastReq.Messages {
+		if strings.Contains(msg.Content, "Current Account State") ||
+			strings.Contains(msg.Content, "api_request") {
+			t.Fatalf("read-only request leaked account/tool context: %q", msg.Content)
+		}
+	}
+}
+
+func TestReadOnlyAgentDoesNotExecuteUnexpectedToolCall(t *testing.T) {
+	llm := &mockLLM{responses: []*mcp.LLMResponse{
+		toolCall("unsafe", "POST", "/api/traders/tr1/start", "{}"),
+	}}
+	a := NewReadOnly(mockGetLLM(llm), BuildGroupGuestPrompt())
+
+	reply := a.Run("启动交易员", nil)
+
+	if llm.calls != 1 {
+		t.Fatalf("expected exactly one LLM call, got %d", llm.calls)
+	}
+	if !strings.Contains(reply, "无法完成") {
+		t.Fatalf("unexpected safety reply: %q", reply)
 	}
 }
 

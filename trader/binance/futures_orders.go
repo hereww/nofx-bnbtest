@@ -49,7 +49,7 @@ func (t *FuturesTrader) OpenLong(symbol string, quantity float64, leverage int) 
 		Type(futures.OrderTypeMarket).
 		Quantity(quantityStr).
 		NewClientOrderID(getBrOrderID()).
-		Do(context.Background())
+		Do(context.Background(), futures.WithRecvWindow(binanceRecvWindowMs))
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to open long position: %w", err)
@@ -104,7 +104,7 @@ func (t *FuturesTrader) OpenShort(symbol string, quantity float64, leverage int)
 		Type(futures.OrderTypeMarket).
 		Quantity(quantityStr).
 		NewClientOrderID(getBrOrderID()).
-		Do(context.Background())
+		Do(context.Background(), futures.WithRecvWindow(binanceRecvWindowMs))
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to open short position: %w", err)
@@ -155,7 +155,7 @@ func (t *FuturesTrader) CloseLong(symbol string, quantity float64) (map[string]i
 		Type(futures.OrderTypeMarket).
 		Quantity(quantityStr).
 		NewClientOrderID(getBrOrderID()).
-		Do(context.Background())
+		Do(context.Background(), futures.WithRecvWindow(binanceRecvWindowMs))
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to close long position: %w", err)
@@ -210,7 +210,7 @@ func (t *FuturesTrader) CloseShort(symbol string, quantity float64) (map[string]
 		Type(futures.OrderTypeMarket).
 		Quantity(quantityStr).
 		NewClientOrderID(getBrOrderID()).
-		Do(context.Background())
+		Do(context.Background(), futures.WithRecvWindow(binanceRecvWindowMs))
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to close short position: %w", err)
@@ -239,7 +239,7 @@ func (t *FuturesTrader) CancelStopLossOrders(symbol string) error {
 	// 1. Cancel legacy stop-loss orders
 	orders, err := t.client.NewListOpenOrdersService().
 		Symbol(symbol).
-		Do(context.Background())
+		Do(context.Background(), futures.WithRecvWindow(binanceRecvWindowMs))
 
 	if err == nil {
 		for _, order := range orders {
@@ -251,7 +251,7 @@ func (t *FuturesTrader) CancelStopLossOrders(symbol string) error {
 				_, err := t.client.NewCancelOrderService().
 					Symbol(symbol).
 					OrderID(order.OrderID).
-					Do(context.Background())
+					Do(context.Background(), futures.WithRecvWindow(binanceRecvWindowMs))
 
 				if err != nil {
 					errMsg := fmt.Sprintf("Order ID %d: %v", order.OrderID, err)
@@ -269,7 +269,7 @@ func (t *FuturesTrader) CancelStopLossOrders(symbol string) error {
 	// 2. Cancel Algo stop-loss orders
 	algoOrders, err := t.client.NewListOpenAlgoOrdersService().
 		Symbol(symbol).
-		Do(context.Background())
+		Do(context.Background(), futures.WithRecvWindow(binanceRecvWindowMs))
 
 	if err == nil {
 		for _, algoOrder := range algoOrders {
@@ -277,7 +277,7 @@ func (t *FuturesTrader) CancelStopLossOrders(symbol string) error {
 			if algoOrder.OrderType == futures.AlgoOrderTypeStopMarket || algoOrder.OrderType == futures.AlgoOrderTypeStop {
 				_, err := t.client.NewCancelAlgoOrderService().
 					AlgoID(algoOrder.AlgoId).
-					Do(context.Background())
+					Do(context.Background(), futures.WithRecvWindow(binanceRecvWindowMs))
 
 				if err != nil {
 					errMsg := fmt.Sprintf("Algo ID %d: %v", algoOrder.AlgoId, err)
@@ -315,7 +315,7 @@ func (t *FuturesTrader) CancelTakeProfitOrders(symbol string) error {
 	// 1. Cancel legacy take-profit orders
 	orders, err := t.client.NewListOpenOrdersService().
 		Symbol(symbol).
-		Do(context.Background())
+		Do(context.Background(), futures.WithRecvWindow(binanceRecvWindowMs))
 
 	if err == nil {
 		for _, order := range orders {
@@ -327,7 +327,7 @@ func (t *FuturesTrader) CancelTakeProfitOrders(symbol string) error {
 				_, err := t.client.NewCancelOrderService().
 					Symbol(symbol).
 					OrderID(order.OrderID).
-					Do(context.Background())
+					Do(context.Background(), futures.WithRecvWindow(binanceRecvWindowMs))
 
 				if err != nil {
 					errMsg := fmt.Sprintf("Order ID %d: %v", order.OrderID, err)
@@ -345,7 +345,7 @@ func (t *FuturesTrader) CancelTakeProfitOrders(symbol string) error {
 	// 2. Cancel Algo take-profit orders
 	algoOrders, err := t.client.NewListOpenAlgoOrdersService().
 		Symbol(symbol).
-		Do(context.Background())
+		Do(context.Background(), futures.WithRecvWindow(binanceRecvWindowMs))
 
 	if err == nil {
 		for _, algoOrder := range algoOrders {
@@ -353,7 +353,7 @@ func (t *FuturesTrader) CancelTakeProfitOrders(symbol string) error {
 			if algoOrder.OrderType == futures.AlgoOrderTypeTakeProfitMarket || algoOrder.OrderType == futures.AlgoOrderTypeTakeProfit {
 				_, err := t.client.NewCancelAlgoOrderService().
 					AlgoID(algoOrder.AlgoId).
-					Do(context.Background())
+					Do(context.Background(), futures.WithRecvWindow(binanceRecvWindowMs))
 
 				if err != nil {
 					errMsg := fmt.Sprintf("Algo ID %d: %v", algoOrder.AlgoId, err)
@@ -388,7 +388,7 @@ func (t *FuturesTrader) CancelAllOrders(symbol string) error {
 	// 1. Cancel all legacy orders
 	err := t.client.NewCancelAllOpenOrdersService().
 		Symbol(symbol).
-		Do(context.Background())
+		Do(context.Background(), futures.WithRecvWindow(binanceRecvWindowMs))
 
 	if err != nil {
 		logger.Infof("  ⚠ Failed to cancel legacy orders: %v", err)
@@ -399,7 +399,7 @@ func (t *FuturesTrader) CancelAllOrders(symbol string) error {
 	// 2. Cancel all Algo orders
 	err = t.client.NewCancelAllAlgoOpenOrdersService().
 		Symbol(symbol).
-		Do(context.Background())
+		Do(context.Background(), futures.WithRecvWindow(binanceRecvWindowMs))
 
 	if err != nil {
 		// Ignore "no algo orders" error
@@ -459,7 +459,7 @@ func (t *FuturesTrader) PlaceLimitOrder(req *types.LimitOrderRequest) (*types.Li
 		NewClientOrderID(getBrOrderID())
 
 	// Execute order
-	order, err := orderService.Do(context.Background())
+	order, err := orderService.Do(context.Background(), futures.WithRecvWindow(binanceRecvWindowMs))
 	if err != nil {
 		return nil, fmt.Errorf("failed to place limit order: %w", err)
 	}
@@ -491,7 +491,7 @@ func (t *FuturesTrader) CancelOrder(symbol, orderID string) error {
 	_, err = t.client.NewCancelOrderService().
 		Symbol(symbol).
 		OrderID(orderIDInt).
-		Do(context.Background())
+		Do(context.Background(), futures.WithRecvWindow(binanceRecvWindowMs))
 
 	if err != nil {
 		return fmt.Errorf("failed to cancel order: %w", err)
@@ -540,7 +540,7 @@ func (t *FuturesTrader) CancelStopOrders(symbol string) error {
 	// 1. Cancel legacy stop orders (for backward compatibility)
 	orders, err := t.client.NewListOpenOrdersService().
 		Symbol(symbol).
-		Do(context.Background())
+		Do(context.Background(), futures.WithRecvWindow(binanceRecvWindowMs))
 
 	if err == nil {
 		for _, order := range orders {
@@ -556,7 +556,7 @@ func (t *FuturesTrader) CancelStopOrders(symbol string) error {
 				_, err := t.client.NewCancelOrderService().
 					Symbol(symbol).
 					OrderID(order.OrderID).
-					Do(context.Background())
+					Do(context.Background(), futures.WithRecvWindow(binanceRecvWindowMs))
 
 				if err != nil {
 					logger.Infof("  ⚠ Failed to cancel legacy order %d: %v", order.OrderID, err)
@@ -573,7 +573,7 @@ func (t *FuturesTrader) CancelStopOrders(symbol string) error {
 	// 2. Cancel Algo orders (new API)
 	err = t.client.NewCancelAllAlgoOpenOrdersService().
 		Symbol(symbol).
-		Do(context.Background())
+		Do(context.Background(), futures.WithRecvWindow(binanceRecvWindowMs))
 
 	if err != nil {
 		// Ignore "no algo orders" error
@@ -599,7 +599,7 @@ func (t *FuturesTrader) GetOpenOrders(symbol string) ([]types.OpenOrder, error) 
 	// 1. Get legacy open orders
 	orders, err := t.client.NewListOpenOrdersService().
 		Symbol(symbol).
-		Do(context.Background())
+		Do(context.Background(), futures.WithRecvWindow(binanceRecvWindowMs))
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to get open orders: %w", err)
@@ -626,7 +626,7 @@ func (t *FuturesTrader) GetOpenOrders(symbol string) ([]types.OpenOrder, error) 
 	// 2. Get Algo orders (new API for stop-loss/take-profit)
 	algoOrders, err := t.client.NewListOpenAlgoOrdersService().
 		Symbol(symbol).
-		Do(context.Background())
+		Do(context.Background(), futures.WithRecvWindow(binanceRecvWindowMs))
 
 	if err == nil {
 		for _, algoOrder := range algoOrders {
@@ -674,7 +674,7 @@ func (t *FuturesTrader) SetStopLoss(symbol string, positionSide string, quantity
 		WorkingType(futures.WorkingTypeContractPrice).
 		ClosePosition(true).
 		ClientAlgoId(getBrOrderID()).
-		Do(context.Background())
+		Do(context.Background(), futures.WithRecvWindow(binanceRecvWindowMs))
 
 	if err != nil {
 		return fmt.Errorf("failed to set stop-loss: %w", err)
@@ -708,7 +708,7 @@ func (t *FuturesTrader) SetTakeProfit(symbol string, positionSide string, quanti
 		WorkingType(futures.WorkingTypeContractPrice).
 		ClosePosition(true).
 		ClientAlgoId(getBrOrderID()).
-		Do(context.Background())
+		Do(context.Background(), futures.WithRecvWindow(binanceRecvWindowMs))
 
 	if err != nil {
 		return fmt.Errorf("failed to set take-profit: %w", err)
@@ -729,7 +729,7 @@ func (t *FuturesTrader) GetOrderStatus(symbol string, orderID string) (map[strin
 	order, err := t.client.NewGetOrderService().
 		Symbol(symbol).
 		OrderID(orderIDInt).
-		Do(context.Background())
+		Do(context.Background(), futures.WithRecvWindow(binanceRecvWindowMs))
 	if err != nil {
 		return nil, fmt.Errorf("failed to get order status: %w", err)
 	}

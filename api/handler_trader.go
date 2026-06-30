@@ -80,6 +80,13 @@ func validateTraderLeverageRange(btcEthLeverage, altcoinLeverage int) (string, s
 	return "", ""
 }
 
+func chooseInitialBalance(userProvided, exchangeEquity float64, foundExchangeEquity bool) float64 {
+	if foundExchangeEquity && exchangeEquity > 0 {
+		return exchangeEquity
+	}
+	return userProvided
+}
+
 func exchangeDisplayName(exchange *store.Exchange) string {
 	if exchange == nil {
 		return "所选交易所账户"
@@ -173,12 +180,12 @@ func validateExchangeForTraderCreation(exchange *store.Exchange) (string, string
 	missing := missingExchangeFields(exchange)
 	if len(missing) > 0 {
 		return formatTraderCreationError(
-			fmt.Sprintf("交易所账户「%s」的配置还不完整，缺少 %s", exchangeDisplayName(exchange), strings.Join(missing, "、")),
-			"请前往「设置 > 交易所配置」补全该账户的必填信息后，再重新创建机器人",
-		), "trader.create.exchange_missing_fields", mapStringPairs(
-			"exchange_name", exchangeDisplayName(exchange),
-			"missing_fields", strings.Join(missing, ", "),
-		)
+				fmt.Sprintf("交易所账户「%s」的配置还不完整，缺少 %s", exchangeDisplayName(exchange), strings.Join(missing, "、")),
+				"请前往「设置 > 交易所配置」补全该账户的必填信息后，再重新创建机器人",
+			), "trader.create.exchange_missing_fields", mapStringPairs(
+				"exchange_name", exchangeDisplayName(exchange),
+				"missing_fields", strings.Join(missing, ", "),
+			)
 	}
 
 	switch exchange.ExchangeType {
@@ -186,12 +193,12 @@ func validateExchangeForTraderCreation(exchange *store.Exchange) (string, string
 		return "", "", nil
 	default:
 		return formatTraderCreationError(
-			fmt.Sprintf("交易所账户「%s」使用了当前版本暂不支持的类型 %s", exchangeDisplayName(exchange), exchange.ExchangeType),
-			"请改用当前版本支持的交易所账户后，再重新创建机器人",
-		), "trader.create.exchange_unsupported", mapStringPairs(
-			"exchange_name", exchangeDisplayName(exchange),
-			"exchange_type", exchange.ExchangeType,
-		)
+				fmt.Sprintf("交易所账户「%s」使用了当前版本暂不支持的类型 %s", exchangeDisplayName(exchange), exchange.ExchangeType),
+				"请改用当前版本支持的交易所账户后，再重新创建机器人",
+			), "trader.create.exchange_unsupported", mapStringPairs(
+				"exchange_name", exchangeDisplayName(exchange),
+				"exchange_type", exchange.ExchangeType,
+			)
 	}
 }
 
@@ -470,9 +477,14 @@ func (s *Server) handleCreateTrader(c *gin.Context) {
 				logger.Infof("⚠️ Failed to query exchange balance, using user input for initial balance: %v", balanceErr)
 			} else {
 				if extractedBalance, found := extractExchangeTotalEquity(balanceInfo); found {
-					actualBalance = extractedBalance
-					logger.Infof("✓ Queried exchange total equity: %.2f %s (user input: %.2f)",
-						actualBalance, accountAssetForExchange(exchangeCfg.ExchangeType), req.InitialBalance)
+					actualBalance = chooseInitialBalance(req.InitialBalance, extractedBalance, true)
+					if extractedBalance <= 0 {
+						logger.Infof("⚠️ Exchange total equity is %.2f; keeping user-provided initial balance %.2f",
+							extractedBalance, req.InitialBalance)
+					} else {
+						logger.Infof("✓ Queried exchange total equity: %.2f %s (user input: %.2f)",
+							actualBalance, accountAssetForExchange(exchangeCfg.ExchangeType), req.InitialBalance)
+					}
 				} else {
 					logger.Infof("⚠️ Unable to extract total equity from balance info, balanceInfo=%v, using user input for initial balance", balanceInfo)
 				}
@@ -531,14 +543,14 @@ func (s *Server) handleCreateTrader(c *gin.Context) {
 
 	if startupWarning == "" {
 		if loadErr := s.traderManager.GetLoadError(traderID); loadErr != nil {
-		logger.Infof("⚠️ Trader %s failed to load after creation: %v", traderID, loadErr)
+			logger.Infof("⚠️ Trader %s failed to load after creation: %v", traderID, loadErr)
 			startupWarning = describeTraderCreationWarning(req.Name, loadErr)
 		}
 	}
 
 	if startupWarning == "" {
 		if _, getErr := s.traderManager.GetTrader(traderID); getErr != nil {
-		logger.Infof("⚠️ Trader %s not found in memory after creation: %v", traderID, getErr)
+			logger.Infof("⚠️ Trader %s not found in memory after creation: %v", traderID, getErr)
 			startupWarning = describeTraderCreationWarning(req.Name, getErr)
 		}
 	}
@@ -546,11 +558,11 @@ func (s *Server) handleCreateTrader(c *gin.Context) {
 	logger.Infof("✓ Trader created successfully: %s (model: %s, exchange: %s)", req.Name, req.AIModelID, req.ExchangeID)
 
 	c.JSON(http.StatusCreated, gin.H{
-		"trader_id":        traderID,
-		"trader_name":      req.Name,
-		"ai_model":         req.AIModelID,
-		"is_running":       false,
-		"startup_warning":  startupWarning,
+		"trader_id":       traderID,
+		"trader_name":     req.Name,
+		"ai_model":        req.AIModelID,
+		"is_running":      false,
+		"startup_warning": startupWarning,
 	})
 }
 

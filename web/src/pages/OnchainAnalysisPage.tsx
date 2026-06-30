@@ -234,6 +234,13 @@ type EarlyWalletFlowResponse = {
   status: string
   completeness: string
   message?: string
+  index_source?: 'archive_rpc' | 'free_local'
+  progress_message?: string
+  start_block?: number
+  end_block?: number
+  last_block?: number
+  seed_wallets?: number
+  updated_at_ms?: number
   token?: { name?: string; symbol?: string }
   seed_count: number
   max_depth: number
@@ -319,6 +326,20 @@ type OnchainAIReport = {
   generated_at: string
 }
 
+type OnchainAIReportJob = {
+  success?: boolean
+  status?: 'queued' | 'running' | 'completed' | 'failed' | 'not_found'
+  job_id?: string
+  report?: string
+  model_id?: string
+  model_name?: string
+  generated_at?: string
+  poll_after_ms?: number
+  error?: string
+  message?: string
+  error_params?: Record<string, string>
+}
+
 type OnchainReportStyle = 'balanced' | 'brief' | 'deep' | 'watchlist'
 type OnchainReportRiskProfile = 'balanced' | 'defensive' | 'aggressive'
 
@@ -377,19 +398,14 @@ export function OnchainAnalysisPage() {
   const selectedAnalysis = selectedToken?.analysis
     ? mergeAnalysisWithWalletGraph(selectedToken.analysis, selectedToken.walletGraph)
     : null
+  const selectedEarlyWalletFlow = selectedToken?.earlyWalletFlow || selectedAnalysis?.early_wallet_flow
+  const selectedEarlyWalletFlowHasData = hasEarlyWalletFlowData(selectedEarlyWalletFlow)
   const anyAnalysisLoading = analysisTokens.some((token) => token.isLoading)
   const reportWindowToken = analysisTokens.find((token) => token.id === reportWindowTokenID) || null
   const graphWindowToken = analysisTokens.find((token) => token.id === graphWindowTokenID) || null
 
   useEffect(() => {
-    localStorage.setItem(ONCHAIN_MANAGER_STORAGE_KEY, JSON.stringify(analysisTokens.map(({
-      isLoading: _isLoading,
-      aiReportLoading: _aiReportLoading,
-      aiReportPromptLoading: _aiReportPromptLoading,
-      walletGraphLoading: _walletGraphLoading,
-      earlyWalletFlowLoading: _earlyWalletFlowLoading,
-      ...token
-    }) => token)))
+    localStorage.setItem(ONCHAIN_MANAGER_STORAGE_KEY, JSON.stringify(analysisTokens.map(sanitizeManagedTokenForStorage)))
   }, [analysisTokens])
 
   useEffect(() => {
@@ -549,9 +565,12 @@ export function OnchainAnalysisPage() {
           agent: toReportAgentAPIConfig(reportAgentConfig),
         }),
       })
-      const data = await readAPIJSON<OnchainAIReport & APIErrorBody & { success?: boolean }>(res)
+      let data = await readAPIJSON<OnchainAIReportJob & OnchainAIReport & APIErrorBody & { success?: boolean }>(res)
       if (!res.ok) {
         throw new Error(getAPIErrorMessage(data, `HTTP ${res.status}`))
+      }
+      if ((data as OnchainAIReportJob).job_id && !(data as OnchainAIReport).report) {
+        data = await pollAIReportJob((data as OnchainAIReportJob).job_id as string, (data as OnchainAIReportJob).poll_after_ms)
       }
       const report = (data as OnchainAIReport).report
       if (!report) {
@@ -579,6 +598,29 @@ export function OnchainAnalysisPage() {
           : item
       )))
     }
+  }
+
+  async function pollAIReportJob(jobID: string, initialDelayMS?: number): Promise<OnchainAIReportJob> {
+    const startedAt = Date.now()
+    let delayMS = normalizePollDelay(initialDelayMS)
+    while (Date.now() - startedAt < 4 * 60 * 1000) {
+      await sleep(delayMS)
+      const res = await fetch(`/api/onchain/ai-report/${encodeURIComponent(jobID)}`)
+      const data = await readAPIJSON<OnchainAIReportJob & APIErrorBody>(res)
+      if (!res.ok) {
+        throw new Error(getAPIErrorMessage(data, `HTTP ${res.status}`))
+      }
+      if (data.status === 'completed' && data.report) {
+        return data
+      }
+      if (data.status === 'failed') {
+        throw new Error(getAPIErrorMessage(data, data.error || (language === 'zh' ? 'AI 报告生成失败。' : 'AI report generation failed.')))
+      }
+      delayMS = normalizePollDelay(data.poll_after_ms)
+    }
+    throw new Error(language === 'zh'
+      ? 'AI 报告仍在生成中，已超过等待时间。请稍后重新打开报告窗口查看或重试。'
+      : 'AI report is still generating and exceeded the wait time. Reopen the report later or retry.')
   }
 
   async function openAIReportWindow(tokenID: string) {
@@ -734,7 +776,7 @@ export function OnchainAnalysisPage() {
       const res = await fetch('/api/onchain/early-wallet-flow/index', {
         method: 'POST',
         headers: getJSONHeaders(token),
-        body: JSON.stringify({ chain: tokenConfig.chain, address: tokenConfig.address }),
+        body: JSON.stringify({ chain: tokenConfig.chain, address: tokenConfig.address, index_source: 'free_local' }),
       })
       const data = await readAPIJSON<APIErrorBody>(res)
       if (!res.ok) {
@@ -760,6 +802,7 @@ export function OnchainAnalysisPage() {
       const params = new URLSearchParams({
         chain: tokenConfig.chain,
         address: tokenConfig.address,
+        index_source: 'free_local',
         seed_count: '100',
         max_depth: '4',
       })
@@ -1143,7 +1186,7 @@ export function OnchainAnalysisPage() {
                 </div>
 
                 <EarlyWalletFlowPanel
-                  flow={selectedToken.earlyWalletFlow || selectedAnalysis?.early_wallet_flow}
+                  flow={selectedEarlyWalletFlow}
                   language={language}
                   loading={Boolean(selectedToken.earlyWalletFlowLoading)}
                   onLoad={() => loadEarlyWalletFlow(selectedToken.id)}
@@ -1205,7 +1248,8 @@ export function OnchainAnalysisPage() {
                       <button
                         type="button"
                         onClick={() => exportEarlyWalletFlow(selectedToken.id)}
-                        className="inline-flex w-fit items-center gap-2 rounded-md border border-white/10 bg-white/[0.05] px-3 py-1.5 text-xs font-semibold text-zinc-100"
+                        disabled={!selectedEarlyWalletFlowHasData}
+                        className="inline-flex w-fit items-center gap-2 rounded-md border border-white/10 bg-white/[0.05] px-3 py-1.5 text-xs font-semibold text-zinc-100 disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         <Download className="h-3.5 w-3.5" />
                         CSV
@@ -1335,6 +1379,15 @@ function getAPIErrorMessage(data: Partial<APIErrorBody>, fallback: string): stri
     return `${base} 如果你刚刚配置过模型，请重新保存一次 API Key。`
   }
   return base
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, ms))
+}
+
+function normalizePollDelay(value?: number): number {
+  if (!Number.isFinite(value || 0) || !value) return 3000
+  return Math.max(1500, Math.min(value, 10000))
 }
 
 function getJSONHeaders(token: string | null): Record<string, string> {
@@ -1574,6 +1627,14 @@ function EarlyWalletFlowPanel({
   const quote = flow?.quote_symbol || 'quote'
   const direction = summary?.direction || 'insufficient_data'
   const tone = getDealerTone(direction)
+  const hasFlowData = hasEarlyWalletFlowData(flow)
+  const isUnavailable = flow?.status === 'archive_rpc_missing' || flow?.status === 'index_required'
+  const isIndexing = flow?.status === 'indexing'
+  const statusTitle = getEarlyFlowStatusTitle(flow?.status, language)
+  const statusHelp = getEarlyFlowStatusHelp(flow, language)
+  const progressText = getEarlyFlowProgressText(flow, language)
+  const detailMessage = flow?.message
+  const incompleteReasons = isIndexing ? (summary?.incomplete_reasons || ['indexing']) : (summary?.incomplete_reasons || [])
 
   return (
     <div className={`mb-4 rounded-lg border ${tone.border} bg-black/20 p-4`}>
@@ -1585,7 +1646,7 @@ function EarlyWalletFlowPanel({
           </div>
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <h3 className="text-xl font-semibold text-white">
-              {getDealerDirectionLabel(direction, language)}
+              {statusTitle || getDealerDirectionLabel(direction, language)}
             </h3>
             <span className="rounded-md border border-white/10 bg-white/[0.05] px-2.5 py-1 text-xs text-zinc-300">
               {flow?.status || (language === 'zh' ? '未计算' : 'not_loaded')}
@@ -1593,20 +1654,24 @@ function EarlyWalletFlowPanel({
             <span className="rounded-md border border-white/10 bg-white/[0.05] px-2.5 py-1 text-xs text-zinc-300">
               {language === 'zh' ? '计价' : 'Quote'} {quote}
             </span>
+            <span className="rounded-md border border-cyan-300/20 bg-cyan-300/10 px-2.5 py-1 text-xs text-cyan-100">
+              {flow?.index_source === 'archive_rpc' ? 'archive_rpc' : 'free_local'}
+            </span>
           </div>
           <p className="mt-2 max-w-4xl text-sm leading-6 text-zinc-300">
             {flow
-              ? (language === 'zh'
+              ? (statusHelp || (language === 'zh'
                 ? `已追踪 ${summary?.seed_wallet_count || 0} 个初始地址、${summary?.tracked_wallet_count || 0} 个分层地址，最深 ${summary?.max_observed_depth || 0} 层。`
-                : `Tracked ${summary?.seed_wallet_count || 0} seed wallets and ${summary?.tracked_wallet_count || 0} layered wallets through depth ${summary?.max_observed_depth || 0}.`)
+                : `Tracked ${summary?.seed_wallet_count || 0} seed wallets and ${summary?.tracked_wallet_count || 0} layered wallets through depth ${summary?.max_observed_depth || 0}.`))
               : (language === 'zh'
-                ? '基于 full-history 索引计算前100早期买家成本、转出衍生地址和已实现盈利。'
-                : 'Calculates early buyer cost basis, transfer descendants, and realized PnL from full-history indexed data.')}
+                ? '基于池子创建后的早期窗口索引计算前100早期买家成本、转出衍生地址和已实现盈利。'
+                : 'Calculates early buyer cost basis, transfer descendants, and realized PnL from the early post-launch index window.')}
           </p>
-          {flow?.message && <p className="mt-2 text-sm text-amber-100">{flow.message}</p>}
-          {(summary?.incomplete_reasons || []).length > 0 && (
+          {progressText && <p className="mt-2 font-mono text-sm text-cyan-100">{progressText}</p>}
+          {detailMessage && <p className="mt-2 text-sm text-amber-100">{detailMessage}</p>}
+          {incompleteReasons.length > 0 && (
             <div className="mt-2 flex flex-wrap gap-2">
-              {summary?.incomplete_reasons?.map((reason) => (
+              {incompleteReasons.map((reason) => (
                 <span key={reason} className="rounded bg-amber-300/10 px-2 py-1 text-xs text-amber-100">{reason}</span>
               ))}
             </div>
@@ -1616,7 +1681,7 @@ function EarlyWalletFlowPanel({
           <button
             type="button"
             onClick={onLoad}
-            disabled={loading}
+            disabled={loading || (isIndexing && !hasFlowData)}
             className="inline-flex items-center gap-2 rounded-md bg-[#F0B90B] px-3 py-2 text-sm font-semibold text-black disabled:opacity-60"
           >
             <RefreshCcw className="h-4 w-4" />
@@ -1625,16 +1690,17 @@ function EarlyWalletFlowPanel({
           <button
             type="button"
             onClick={onStartIndex}
-            disabled={loading}
+            disabled={loading || isIndexing}
             className="inline-flex items-center gap-2 rounded-md border border-cyan-300/25 bg-cyan-300/10 px-3 py-2 text-sm font-semibold text-cyan-100 disabled:opacity-60"
           >
             <GitBranch className="h-4 w-4" />
-            {language === 'zh' ? '启动索引' : 'Start index'}
+            {isIndexing ? (language === 'zh' ? '索引运行中' : 'Index running') : (language === 'zh' ? '启动索引' : 'Start index')}
           </button>
           <button
             type="button"
             onClick={onExport}
-            className="inline-flex items-center gap-2 rounded-md border border-white/10 bg-white/[0.05] px-3 py-2 text-sm font-semibold text-zinc-100"
+            disabled={!hasFlowData || isIndexing}
+            className="inline-flex items-center gap-2 rounded-md border border-white/10 bg-white/[0.05] px-3 py-2 text-sm font-semibold text-zinc-100 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Download className="h-4 w-4" />
             CSV
@@ -1642,7 +1708,7 @@ function EarlyWalletFlowPanel({
         </div>
       </div>
 
-      {summary ? (
+      {hasFlowData && summary ? (
         <>
           <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <MetricCard label={language === 'zh' ? '初始总成本' : 'Initial cost'} value={formatQuote(summary.total_initial_cost, quote)} />
@@ -1662,6 +1728,25 @@ function EarlyWalletFlowPanel({
             <EarlyWalletTable wallets={flow?.wallets || []} quote={quote} language={language} />
           </div>
         </>
+      ) : summary || isUnavailable ? (
+        <div className="mt-4 rounded-lg border border-dashed border-amber-300/20 bg-amber-300/[0.05] p-5 text-sm leading-6 text-amber-50">
+          <div className="font-semibold text-amber-100">
+            {language === 'zh' ? '早期地址模型暂不能产出有效数据' : 'Early wallet flow is not ready'}
+          </div>
+          <div className="mt-1 text-amber-100/85">
+            {detailMessage || statusHelp || (language === 'zh'
+              ? '需要先完成早期窗口索引，才能计算前100地址成本、转出链路和已实现盈利。'
+              : 'The early index window must complete before costs, transfer paths, and realized PnL can be calculated.')}
+          </div>
+          {progressText && <div className="mt-2 font-mono text-xs text-cyan-100">{progressText}</div>}
+          {incompleteReasons.length > 0 && (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {incompleteReasons.map((reason) => (
+                <span key={reason} className="rounded bg-black/20 px-2 py-1 text-xs text-amber-50">{reason}</span>
+              ))}
+            </div>
+          )}
+        </div>
       ) : (
         <div className="mt-4 rounded-lg border border-dashed border-white/10 bg-white/[0.03] p-6 text-center text-sm text-zinc-500">
           {language === 'zh' ? '还没有计算早期地址资金流。点击“计算模型”开始。' : 'Early wallet flow has not been calculated yet. Click Calculate to start.'}
@@ -1669,6 +1754,91 @@ function EarlyWalletFlowPanel({
       )}
     </div>
   )
+}
+
+function hasEarlyWalletFlowData(flow: EarlyWalletFlowResponse | undefined): boolean {
+  const summary = flow?.summary
+  return Boolean(summary && ((summary.seed_wallet_count || 0) > 0 || (summary.tracked_wallet_count || 0) > 0))
+}
+
+function getEarlyFlowProgressText(flow: EarlyWalletFlowResponse | undefined, language: string): string {
+  if (!flow) return ''
+  if (flow.progress_message) return flow.progress_message
+  if (flow.status !== 'indexing') return ''
+  const start = flow.start_block || 0
+  const last = flow.last_block || 0
+  const end = flow.end_block || 0
+  const seedWallets = flow.seed_wallets || 0
+  if (last <= 0 && end <= 0) return ''
+  const progress = last > 0 && end > 0
+    ? `${formatBlockNumber(last)} / ${formatBlockNumber(end)}`
+    : formatBlockNumber(last || end)
+  const seedText = seedWallets > 0
+    ? (language === 'zh' ? `，已找到 ${seedWallets} 个早期买入地址` : `, ${seedWallets} early buy wallets found`)
+    : ''
+  if (start > 0 && last > 0 && end > 0 && end >= start) {
+    const pct = Math.max(0, Math.min(100, ((last - start + 1) / (end - start + 1)) * 100)).toFixed(2)
+    return language === 'zh'
+      ? `索引进度 ${progress} (${pct}%)${seedText}`
+      : `Index progress ${progress} (${pct}%)${seedText}`
+  }
+  return language === 'zh' ? `索引进度 ${progress}${seedText}` : `Index progress ${progress}${seedText}`
+}
+
+function formatBlockNumber(value: number): string {
+  if (!Number.isFinite(value) || value <= 0) return '-'
+  return Math.trunc(value).toLocaleString()
+}
+
+function getEarlyFlowStatusTitle(status: string | undefined, language: string): string {
+  switch (status) {
+    case 'archive_rpc_missing':
+      return language === 'zh' ? '缺少 Archive RPC' : 'Archive RPC missing'
+    case 'archive_rpc_unsupported':
+      return language === 'zh' ? 'Archive RPC 不支持' : 'Archive RPC unsupported'
+    case 'index_required':
+      return language === 'zh' ? '需要先启动索引' : 'Index required'
+    case 'indexing':
+      return language === 'zh' ? '索引进行中' : 'Indexing'
+    case 'partial_data':
+      return language === 'zh' ? '数据不完整' : 'Partial data'
+    default:
+      return ''
+  }
+}
+
+function getEarlyFlowStatusHelp(flow: EarlyWalletFlowResponse | undefined, language: string): string {
+  const status = flow?.status
+  const source = flow?.index_source || 'free_local'
+  switch (status) {
+    case 'archive_rpc_missing':
+      return language === 'zh'
+        ? 'Archive RPC 未配置；仍可点击“启动索引”使用免费本地索引，历史补全可能较慢且不保证旧币100%完整。'
+        : 'Archive RPC is not configured; you can still start the free local index. Historical backfill may be slow and incomplete for old tokens.'
+    case 'archive_rpc_unsupported':
+      return language === 'zh'
+        ? '当前 RPC 不支持大范围历史 eth_getLogs。可以继续用免费本地索引小批量慢扫；旧币不保证补全，新币从启动后会持续积累。'
+        : 'The RPC does not support broad historical eth_getLogs. Free local indexing can continue with small batches; old tokens may remain partial while new tokens accumulate from now on.'
+    case 'index_required':
+      return language === 'zh'
+        ? '该合约还没有启动早期窗口索引。点击“启动索引”后将启动免费本地索引，历史补全可能较慢。'
+        : 'Early-window indexing has not been started. Click Start Index to create a free local indexing job; historical backfill may be slow.'
+    case 'indexing':
+      if (source === 'free_local') {
+        return language === 'zh'
+          ? '免费本地索引正在后台小批量补历史；找到的早期买家会逐步增加，当前结果可参考但可能继续变化。'
+          : 'Free local indexing is backfilling history in small batches; early buyers will accumulate and current results may change.'
+      }
+      return language === 'zh'
+        ? '早期窗口索引还在进行中。索引完成后，系统才会计算前100早期地址成本、转出链路和已实现盈利。'
+        : 'Early-window indexing is still running. Early-wallet costs, transfer paths, and realized PnL will be calculated after it completes.'
+    case 'partial_data':
+      return language === 'zh'
+        ? '免费索引或 swap 单价数据不完整；数量统计和已找到早期买家可参考，旧币历史不保证100%补全。'
+        : 'Free indexed data or swap prices are incomplete; quantities and discovered early buyers are useful, but old-token history is not guaranteed complete.'
+    default:
+      return ''
+  }
 }
 
 function EarlySeedTable({ seeds, quote, language }: { seeds: EarlyWalletSeed[]; quote: string; language: string }) {
@@ -1711,7 +1881,7 @@ function EarlySeedTable({ seeds, quote, language }: { seeds: EarlyWalletSeed[]; 
 }
 
 function EarlyWalletTable({ wallets, quote, language }: { wallets: EarlyWalletFlowWallet[]; quote: string; language: string }) {
-  const rows = wallets.slice(0, 120)
+  const rows = wallets
   return (
     <div className="rounded-lg border border-white/10 bg-white/[0.035] p-4">
       <h3 className="text-sm font-semibold text-white">{language === 'zh' ? '分层地址明细' : 'Layered wallet details'}</h3>
@@ -1998,7 +2168,9 @@ function AIReportWindow({
           {activeTab === 'report' && (
             token.aiReportLoading ? (
               <div className="rounded-lg border border-violet-300/20 bg-violet-300/[0.08] p-6 text-sm text-violet-100">
-                {language === 'zh' ? 'AI 正在根据该币种的链上数据生成报告...' : 'AI is writing a report from this token on-chain data...'}
+                {language === 'zh'
+                  ? 'AI 报告任务已提交，正在等待模型生成结果。这个过程可能需要 1-2 分钟，页面会自动刷新结果。'
+                  : 'AI report job is queued and waiting for the model result. This may take 1-2 minutes and the page will refresh automatically.'}
               </div>
             ) : token.aiReport ? (
               <>
@@ -2486,20 +2658,59 @@ function loadManagedTokens(): ManagedAnalysisToken[] {
     if (!Array.isArray(parsed)) return defaultManagedTokens()
     const tokens = parsed
       .filter((token) => token && token.chain === 'bsc' && evmAddressPattern.test(token.address))
-      .map((token) => ({
-        ...token,
-        id: token.id || `bsc:${normalizeEVMAddress(token.address)}`,
-        address: normalizeEVMAddress(token.address),
-        depth: token.depth === 'full' ? 'full' as const : 'recent' as const,
-        monitorEnabled: token.monitorEnabled ?? true,
-        monitorIntervalMinutes: clampMonitorIntervalMinutes(token.monitorIntervalMinutes || DEFAULT_MONITOR_INTERVAL_MINUTES),
-        isLoading: false,
-        error: '',
-      }))
+      .map((token) => {
+        const cleanToken = sanitizeLoadedManagedToken(token)
+        return {
+          ...cleanToken,
+          id: token.id || `bsc:${normalizeEVMAddress(token.address)}`,
+          address: normalizeEVMAddress(token.address),
+          depth: token.depth === 'full' ? 'full' as const : 'recent' as const,
+          monitorEnabled: token.monitorEnabled ?? true,
+          monitorIntervalMinutes: clampMonitorIntervalMinutes(token.monitorIntervalMinutes || DEFAULT_MONITOR_INTERVAL_MINUTES),
+          isLoading: false,
+          error: '',
+        }
+      })
     return tokens.length > 0 ? tokens : defaultManagedTokens()
   } catch {
     return defaultManagedTokens()
   }
+}
+
+function sanitizeLoadedManagedToken(token: ManagedAnalysisToken): ManagedAnalysisToken {
+  const {
+    earlyWalletFlow: _earlyWalletFlow,
+    earlyWalletFlowError: _earlyWalletFlowError,
+    earlyWalletFlowLoading: _earlyWalletFlowLoading,
+    walletGraph: _walletGraph,
+    walletGraphError: _walletGraphError,
+    walletGraphLoading: _walletGraphLoading,
+    ...cleanToken
+  } = token
+  if (cleanToken.analysis?.early_wallet_flow) {
+    cleanToken.analysis = { ...cleanToken.analysis, early_wallet_flow: undefined }
+  }
+  return cleanToken
+}
+
+function sanitizeManagedTokenForStorage(token: ManagedAnalysisToken): ManagedAnalysisToken {
+  const {
+    isLoading: _isLoading,
+    error: _error,
+    aiReportLoading: _aiReportLoading,
+    aiReportPromptLoading: _aiReportPromptLoading,
+    walletGraph: _walletGraph,
+    walletGraphError: _walletGraphError,
+    walletGraphLoading: _walletGraphLoading,
+    earlyWalletFlow: _earlyWalletFlow,
+    earlyWalletFlowError: _earlyWalletFlowError,
+    earlyWalletFlowLoading: _earlyWalletFlowLoading,
+    ...cleanToken
+  } = token
+  if (cleanToken.analysis?.early_wallet_flow) {
+    cleanToken.analysis = { ...cleanToken.analysis, early_wallet_flow: undefined }
+  }
+  return cleanToken
 }
 
 function defaultManagedTokens(): ManagedAnalysisToken[] {

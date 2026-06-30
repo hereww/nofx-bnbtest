@@ -394,6 +394,33 @@ export function TelegramConfigModal({ onClose, language }: TelegramConfigModalPr
                     }}
                   />
 
+                  <div
+                    className="p-4 rounded-xl space-y-3"
+                    style={{ background: '#0B0E11', border: '1px solid #2B3139' }}
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="text-sm font-semibold" style={{ color: '#EAECEF' }}>
+                        {t('telegram.groupChat', language)}
+                      </div>
+                      <div
+                        className="text-xs font-semibold"
+                        style={{ color: config?.group_bound ? '#0ECB81' : '#848E9C' }}
+                      >
+                        {config?.group_bound
+                          ? `${t('telegram.groupBound', language)}${config.group_title ? ` · ${config.group_title}` : ''}`
+                          : t('telegram.groupNotBound', language)}
+                      </div>
+                    </div>
+                    <div className="text-xs leading-5" style={{ color: '#848E9C' }}>
+                      {t('telegram.groupStep1', language)}<br />
+                      {t('telegram.groupStep2', language)} <code className="text-blue-400">/bindgroup</code><br />
+                      {t('telegram.groupStep3', language)} <code className="text-blue-400">/ask {t('telegram.groupQuestion', language)}</code>
+                    </div>
+                    <div className="text-xs" style={{ color: '#F0B90B' }}>
+                      {t('telegram.groupOwnerOnly', language)}
+                    </div>
+                  </div>
+
                   {/* What you can do */}
                   <div
                     className="p-4 rounded-xl space-y-2"

@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"nofx/onchain"
+	"nofx/store"
 
 	"github.com/gin-gonic/gin"
 )
@@ -48,6 +49,9 @@ func (s *Server) handleOnchainWalletGraph(c *gin.Context) {
 }
 
 func (s *Server) handleOnchainIndexStatus(c *gin.Context) {
+	if shouldProxyOnchainIndexer() && s.proxyOnchainIndexer(c, "/api/onchain/index-status") {
+		return
+	}
 	resp, err := s.onchainService.IndexStatus(c.DefaultQuery("chain", "bsc"), c.Query("address"))
 	if err != nil {
 		SafeInternalError(c, "Onchain index status", err)
@@ -82,13 +86,17 @@ func (s *Server) handleOnchainIndexToken(c *gin.Context) {
 }
 
 func (s *Server) handleOnchainEarlyWalletFlow(c *gin.Context) {
+	if shouldProxyOnchainIndexer() && s.proxyOnchainIndexer(c, "/api/onchain/early-wallet-flow") {
+		return
+	}
 	seedCount, _ := strconv.Atoi(c.DefaultQuery("seed_count", "100"))
 	maxDepth, _ := strconv.Atoi(c.DefaultQuery("max_depth", "4"))
 	resp, err := s.onchainService.EarlyWalletFlow(c.Request.Context(), onchain.EarlyWalletFlowRequest{
-		Chain:     c.DefaultQuery("chain", "bsc"),
-		Address:   c.Query("address"),
-		SeedCount: seedCount,
-		MaxDepth:  maxDepth,
+		Chain:       c.DefaultQuery("chain", "bsc"),
+		Address:     c.Query("address"),
+		IndexSource: c.Query("index_source"),
+		SeedCount:   seedCount,
+		MaxDepth:    maxDepth,
 	})
 	if err != nil {
 		SafeInternalError(c, "Onchain early wallet flow", err)
@@ -102,6 +110,9 @@ func (s *Server) handleOnchainEarlyWalletFlow(c *gin.Context) {
 }
 
 func (s *Server) handleOnchainEarlyWalletFlowIndex(c *gin.Context) {
+	if shouldProxyOnchainIndexer() && s.proxyOnchainIndexer(c, "/api/onchain/early-wallet-flow/index") {
+		return
+	}
 	var req onchain.EarlyWalletFlowRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "status": onchain.StatusInvalidRequest, "error": "invalid request body"})
@@ -111,8 +122,10 @@ func (s *Server) handleOnchainEarlyWalletFlowIndex(c *gin.Context) {
 		req.Chain = "bsc"
 	}
 	resp, err := s.onchainService.QueueIndex(c.Request.Context(), onchain.IndexTokenRequest{
-		Chain:   req.Chain,
-		Address: req.Address,
+		Chain:       req.Chain,
+		Address:     req.Address,
+		Scope:       store.OnchainIndexScopeEarlyWalletWindow,
+		IndexSource: req.IndexSource,
 	})
 	if err != nil {
 		SafeInternalError(c, "Onchain early wallet flow index", err)
@@ -126,14 +139,18 @@ func (s *Server) handleOnchainEarlyWalletFlowIndex(c *gin.Context) {
 }
 
 func (s *Server) handleOnchainEarlyWalletFlowExport(c *gin.Context) {
+	if shouldProxyOnchainIndexer() && s.proxyOnchainIndexer(c, "/api/onchain/early-wallet-flow/export") {
+		return
+	}
 	seedCount, _ := strconv.Atoi(c.DefaultQuery("seed_count", "100"))
 	maxDepth, _ := strconv.Atoi(c.DefaultQuery("max_depth", "4"))
 	address := strings.ToLower(strings.TrimSpace(c.Query("address")))
 	req := onchain.EarlyWalletFlowRequest{
-		Chain:     c.DefaultQuery("chain", "bsc"),
-		Address:   address,
-		SeedCount: seedCount,
-		MaxDepth:  maxDepth,
+		Chain:       c.DefaultQuery("chain", "bsc"),
+		Address:     address,
+		IndexSource: c.Query("index_source"),
+		SeedCount:   seedCount,
+		MaxDepth:    maxDepth,
 	}
 	resp, err := s.onchainService.EarlyWalletFlow(c.Request.Context(), req)
 	if err != nil {

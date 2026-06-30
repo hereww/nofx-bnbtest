@@ -34,3 +34,14 @@ func NewProxyAwareHTTPClient(timeout time.Duration, proxyRaw string) (*http.Clie
 	client.Transport = transport
 	return client, nil
 }
+
+// NewDirectHTTPClient returns an HTTP client that ignores HTTP_PROXY and
+// HTTPS_PROXY environment variables.
+func NewDirectHTTPClient(timeout time.Duration) *http.Client {
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.Proxy = nil
+	return &http.Client{
+		Timeout:   timeout,
+		Transport: transport,
+	}
+}

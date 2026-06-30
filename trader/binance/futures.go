@@ -14,6 +14,9 @@ import (
 	"github.com/adshao/go-binance/v2/futures"
 )
 
+const binanceRecvWindowMs int64 = 60000
+const binancePrivateCacheDuration = 60 * time.Second
+
 // getBrOrderID generates unique order ID (for futures contracts)
 // Format: x-{BR_ID}{TIMESTAMP}{RANDOM}
 // Futures limit is 32 characters, use this limit consistently
@@ -78,7 +81,7 @@ func NewFuturesTraderWithTestnet(apiKey, secretKey string, userId string, testne
 	syncBinanceServerTime(client)
 	trader := &FuturesTrader{
 		client:        client,
-		cacheDuration: 15 * time.Second, // 15-second cache
+		cacheDuration: binancePrivateCacheDuration,
 	}
 
 	// Set dual-side position mode (Hedge Mode)
@@ -92,6 +95,7 @@ func NewFuturesTraderWithTestnet(apiKey, secretKey string, userId string, testne
 
 func newFuturesClient(apiKey, secretKey string, testnet bool) *futures.Client {
 	client := futures.NewClient(apiKey, secretKey)
+	installBinanceRateLimitTransport(&client.HTTPClient)
 	if testnet {
 		client.BaseURL = futures.BaseApiTestnetUrl
 	}
@@ -100,12 +104,17 @@ func newFuturesClient(apiKey, secretKey string, testnet bool) *futures.Client {
 
 // setDualSidePosition sets dual-side position mode (called during initialization)
 func (t *FuturesTrader) setDualSidePosition() error {
+	if err := checkBinanceRateLimitCooldown(); err != nil {
+		return err
+	}
+
 	// Try to set dual-side position mode
 	err := t.client.NewChangePositionModeService().
 		DualSide(true). // true = dual-side position (Hedge Mode)
-		Do(context.Background())
+		Do(context.Background(), futures.WithRecvWindow(binanceRecvWindowMs))
 
 	if err != nil {
+		err = recordBinanceAPIError(err)
 		// If error message contains "No need to change", it means already in dual-side position mode
 		if strings.Contains(err.Error(), "No need to change position side") {
 			logger.Infof("  ✓ Account is already in dual-side position mode (Hedge Mode)")
@@ -122,16 +131,41 @@ func (t *FuturesTrader) setDualSidePosition() error {
 
 // syncBinanceServerTime syncs Binance server time to ensure request timestamps are valid
 func syncBinanceServerTime(client *futures.Client) {
-	serverTime, err := client.NewServerTimeService().Do(context.Background())
-	if err != nil {
-		logger.Infof("⚠️ Failed to sync Binance server time: %v", err)
+	type sample struct {
+		offset int64
+		rtt    time.Duration
+	}
+
+	var best *sample
+	var lastErr error
+	for i := 0; i < 3; i++ {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		start := time.Now()
+		serverTime, err := client.NewServerTimeService().Do(ctx)
+		end := time.Now()
+		cancel()
+		if err != nil {
+			lastErr = err
+			continue
+		}
+
+		midpoint := start.Add(end.Sub(start) / 2).UnixMilli()
+		current := sample{
+			offset: midpoint - serverTime,
+			rtt:    end.Sub(start),
+		}
+		if best == nil || current.rtt < best.rtt {
+			best = &current
+		}
+	}
+
+	if best == nil {
+		logger.Infof("⚠️ Failed to sync Binance server time: %v", lastErr)
 		return
 	}
 
-	now := time.Now().UnixMilli()
-	offset := now - serverTime
-	client.TimeOffset = offset
-	logger.Infof("⏱ Binance server time synced, offset %dms", offset)
+	client.TimeOffset = best.offset
+	logger.Infof("⏱ Binance server time synced, offset %dms (best RTT %s)", best.offset, best.rtt)
 }
 
 // Helper functions

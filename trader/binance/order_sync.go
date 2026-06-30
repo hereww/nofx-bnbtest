@@ -2,6 +2,7 @@ package binance
 
 import (
 	"fmt"
+	"hash/crc32"
 	"nofx/logger"
 	"nofx/market"
 	"nofx/store"
@@ -352,6 +353,11 @@ func (t *FuturesTrader) determineOrderAction(side, positionSide string, realized
 func (t *FuturesTrader) StartOrderSync(traderID string, exchangeID string, exchangeType string, st *store.Store, interval time.Duration) {
 	// Run first sync immediately
 	go func() {
+		jitter := time.Duration(crc32.ChecksumIEEE([]byte(traderID))%30) * time.Second
+		if jitter > 0 {
+			logger.Infof("🔄 Initial Binance order sync delayed by %v to avoid request bursts", jitter)
+			time.Sleep(jitter)
+		}
 		logger.Infof("🔄 Running initial Binance order sync...")
 		if err := t.SyncOrdersFromBinance(traderID, exchangeID, exchangeType, st); err != nil {
 			logger.Infof("⚠️  Initial Binance order sync failed: %v", err)

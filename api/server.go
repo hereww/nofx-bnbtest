@@ -26,6 +26,7 @@ type Server struct {
 	cryptoHandler             *CryptoHandler
 	exchangeAccountStateCache *ExchangeAccountStateCache
 	onchainService            *onchain.Service
+	onchainAIReports          *onchainAIReportJobStore
 	httpServer                *http.Server
 	port                      int
 	telegramReloadCh          chan<- struct{} // signal Telegram bot to reload
@@ -51,6 +52,7 @@ func NewServer(traderManager *manager.TraderManager, st *store.Store, cryptoServ
 		cryptoHandler:             cryptoHandler,
 		exchangeAccountStateCache: NewExchangeAccountStateCache(),
 		onchainService:            onchain.NewService(st),
+		onchainAIReports:          newOnchainAIReportJobStore(),
 		port:                      port,
 	}
 
@@ -117,6 +119,7 @@ func (s *Server) setupRoutes() {
 		s.route(api, "GET", "/onchain/index-status", "On-chain token index status by contract address", s.handleOnchainIndexStatus)
 		s.route(api, "POST", "/onchain/ai-report/preview", "Preview the AI prompt for an on-chain analysis report", s.handleOnchainAIReportPreview)
 		s.route(api, "POST", "/onchain/ai-report", "Generate an AI on-chain analysis report for one token", s.handleOnchainAIReport)
+		s.route(api, "GET", "/onchain/ai-report/:job_id", "Get async AI on-chain report generation status", s.handleOnchainAIReportJob)
 		s.route(api, "GET", "/data-gateway/*path", "Proxy self-hosted market data gateway", s.handleDataGatewayProxy)
 
 		// Public strategy market (no authentication required)
@@ -237,7 +240,7 @@ Use this to enable/disable an exchange or update API credentials. The "id" field
 
 			// Telegram bot configuration
 			s.routeWithSchema(protected, "GET", "/telegram", "Get Telegram bot configuration",
-				`Returns: {"bot_token":"<string>","model_id":"<EXACT id of configured AI model>","chat_id":"<bound Telegram chat id, empty if not bound>"}`,
+				`Returns the masked bot token, selected model, private owner binding, and optional Telegram group binding status.`,
 				s.handleGetTelegramConfig)
 			s.routeWithSchema(protected, "POST", "/telegram", "Set Telegram bot token and AI model",
 				`Body: {"bot_token":"<string — Telegram BotFather token>","model_id":"<EXACT id from GET /api/models>"}

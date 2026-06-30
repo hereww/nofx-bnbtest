@@ -2,6 +2,7 @@ package onchain
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"nofx/config"
@@ -76,7 +77,7 @@ func TestEarlyWalletFlowWeightedCostTransfersAcrossDepths(t *testing.T) {
 	}
 }
 
-func TestEarlyWalletFlowReportsMissingArchiveRPC(t *testing.T) {
+func TestEarlyWalletFlowDefaultsToFreeLocalIndexRequiredWithoutArchiveRPC(t *testing.T) {
 	config.Init()
 	config.Get().OnchainBSCArchiveRPCURL = ""
 	st, err := store.New(":memory:")
@@ -92,8 +93,127 @@ func TestEarlyWalletFlowReportsMissingArchiveRPC(t *testing.T) {
 	if err != nil {
 		t.Fatalf("EarlyWalletFlow error: %v", err)
 	}
+	if resp.Status != StatusIndexRequired {
+		t.Fatalf("status = %s, want %s", resp.Status, StatusIndexRequired)
+	}
+	if resp.IndexSource != store.OnchainIndexSourceFreeLocal {
+		t.Fatalf("index source = %s, want free_local", resp.IndexSource)
+	}
+}
+
+func TestEarlyWalletFlowArchiveSourceReportsMissingArchiveRPC(t *testing.T) {
+	config.Init()
+	config.Get().OnchainBSCArchiveRPCURL = ""
+	st, err := store.New(":memory:")
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	defer st.Close()
+
+	resp, err := NewService(st).EarlyWalletFlow(context.Background(), EarlyWalletFlowRequest{
+		Chain:       "bsc",
+		Address:     "0x812fc5119b772c6c7a66249a559f3614623f4444",
+		IndexSource: store.OnchainIndexSourceArchiveRPC,
+	})
+	if err != nil {
+		t.Fatalf("EarlyWalletFlow error: %v", err)
+	}
 	if resp.Status != StatusArchiveRPCMissing {
 		t.Fatalf("status = %s, want %s", resp.Status, StatusArchiveRPCMissing)
+	}
+}
+
+func TestEarlyWalletFlowIndexingReturnsProgressWithoutPartialConclusions(t *testing.T) {
+	config.Init()
+	config.Get().OnchainBSCArchiveRPCURL = "http://archive.example"
+
+	st, err := store.New(":memory:")
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	defer st.Close()
+
+	chain := "bsc"
+	token := "0x812fc5119b772c6c7a66249a559f3614623f4444"
+	if err := st.Onchain().UpsertToken(&store.OnchainToken{Chain: chain, Address: token, Symbol: "FPHX", Decimals: 18}); err != nil {
+		t.Fatalf("upsert token: %v", err)
+	}
+	if err := st.Onchain().UpsertJob(&store.OnchainIndexJob{
+		Chain:        chain,
+		TokenAddress: token,
+		Status:       store.OnchainJobStatusIndexing,
+		StartBlock:   100,
+		EndBlock:     200,
+		LastBlock:    150,
+		UpdatedAtMS:  123456,
+	}); err != nil {
+		t.Fatalf("upsert job: %v", err)
+	}
+
+	resp, err := NewService(st).EarlyWalletFlow(context.Background(), EarlyWalletFlowRequest{Chain: chain, Address: token})
+	if err != nil {
+		t.Fatalf("EarlyWalletFlow error: %v", err)
+	}
+	if resp.Status != StatusIndexing {
+		t.Fatalf("status = %s, want %s", resp.Status, StatusIndexing)
+	}
+	if resp.LastBlock != 150 || resp.EndBlock != 200 {
+		t.Fatalf("progress last/end = %d/%d, want 150/200", resp.LastBlock, resp.EndBlock)
+	}
+	if len(resp.Summary.IncompleteReasons) != 1 || resp.Summary.IncompleteReasons[0] != "indexing" {
+		t.Fatalf("incomplete reasons = %#v, want [indexing]", resp.Summary.IncompleteReasons)
+	}
+	if resp.Message == "No early buy wallets found from indexed swaps." {
+		t.Fatalf("message should not report partial early-wallet conclusions while indexing")
+	}
+}
+
+func TestEarlyWalletFlowIndexingReportsRateLimitRetry(t *testing.T) {
+	config.Init()
+	config.Get().OnchainBSCArchiveRPCURL = "http://archive.example"
+
+	st, err := store.New(":memory:")
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	defer st.Close()
+
+	chain := "bsc"
+	token := "0x812fc5119b772c6c7a66249a559f3614623f4444"
+	if err := st.Onchain().UpsertToken(&store.OnchainToken{Chain: chain, Address: token, Symbol: "FPHX", Decimals: 18}); err != nil {
+		t.Fatalf("upsert token: %v", err)
+	}
+	if err := st.Onchain().UpsertJob(&store.OnchainIndexJob{
+		Chain:        chain,
+		TokenAddress: token,
+		Status:       store.OnchainJobStatusQueued,
+		StartBlock:   100,
+		EndBlock:     200,
+		LastBlock:    150,
+		UpdatedAtMS:  123456,
+		ErrorMessage: "rpc rate limited; retrying",
+	}); err != nil {
+		t.Fatalf("upsert job: %v", err)
+	}
+
+	resp, err := NewService(st).EarlyWalletFlow(context.Background(), EarlyWalletFlowRequest{Chain: chain, Address: token})
+	if err != nil {
+		t.Fatalf("EarlyWalletFlow error: %v", err)
+	}
+	if resp.Status != StatusIndexing {
+		t.Fatalf("status = %s, want %s", resp.Status, StatusIndexing)
+	}
+	if !strings.Contains(resp.Message, "rate limited") {
+		t.Fatalf("message = %q, want rate limited", resp.Message)
+	}
+	found := false
+	for _, reason := range resp.Summary.IncompleteReasons {
+		if reason == "rpc_rate_limited" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("incomplete reasons = %#v, want rpc_rate_limited", resp.Summary.IncompleteReasons)
 	}
 }
 

@@ -7,6 +7,8 @@ import (
 	"nofx/trader/types"
 	"strconv"
 	"time"
+
+	"github.com/adshao/go-binance/v2/futures"
 )
 
 // GetBalance gets account balance (with cache)
@@ -22,9 +24,13 @@ func (t *FuturesTrader) GetBalance() (map[string]interface{}, error) {
 	t.balanceCacheMutex.RUnlock()
 
 	// Cache expired or doesn't exist, call API
+	if err := checkBinanceRateLimitCooldown(); err != nil {
+		return nil, err
+	}
 	logger.Infof("🔄 Cache expired, calling Binance API to get account balance...")
-	account, err := t.client.NewGetAccountService().Do(context.Background())
+	account, err := t.client.NewGetAccountService().Do(context.Background(), futures.WithRecvWindow(binanceRecvWindowMs))
 	if err != nil {
+		err = recordBinanceAPIError(err)
 		logger.Infof("❌ Binance API call failed: %v", err)
 		return nil, fmt.Errorf("failed to get account info: %w", err)
 	}
@@ -117,13 +123,18 @@ func (t *FuturesTrader) GetTrades(startTime time.Time, limit int) ([]types.Trade
 		limit = 1000
 	}
 
+	if err := checkBinanceRateLimitCooldown(); err != nil {
+		return nil, err
+	}
+
 	// Use Income API to get REALIZED_PNL records (all symbols)
 	incomes, err := t.client.NewGetIncomeHistoryService().
 		IncomeType("REALIZED_PNL").
 		StartTime(startTime.UnixMilli()).
 		Limit(int64(limit)).
-		Do(context.Background())
+		Do(context.Background(), futures.WithRecvWindow(binanceRecvWindowMs))
 	if err != nil {
+		err = recordBinanceAPIError(err)
 		return nil, fmt.Errorf("failed to get income history: %w", err)
 	}
 
@@ -160,12 +171,17 @@ func (t *FuturesTrader) GetTradesForSymbol(symbol string, startTime time.Time, l
 		limit = 1000
 	}
 
+	if err := checkBinanceRateLimitCooldown(); err != nil {
+		return nil, err
+	}
+
 	accountTrades, err := t.client.NewListAccountTradeService().
 		Symbol(symbol).
 		StartTime(startTime.UnixMilli()).
 		Limit(limit).
-		Do(context.Background())
+		Do(context.Background(), futures.WithRecvWindow(binanceRecvWindowMs))
 	if err != nil {
+		err = recordBinanceAPIError(err)
 		return nil, fmt.Errorf("failed to get trade history for %s: %w", symbol, err)
 	}
 
@@ -203,12 +219,17 @@ func (t *FuturesTrader) GetTradesForSymbolFromID(symbol string, fromID int64, li
 		limit = 1000
 	}
 
+	if err := checkBinanceRateLimitCooldown(); err != nil {
+		return nil, err
+	}
+
 	accountTrades, err := t.client.NewListAccountTradeService().
 		Symbol(symbol).
 		FromID(fromID).
 		Limit(limit).
-		Do(context.Background())
+		Do(context.Background(), futures.WithRecvWindow(binanceRecvWindowMs))
 	if err != nil {
+		err = recordBinanceAPIError(err)
 		return nil, fmt.Errorf("failed to get trade history for %s from ID %d: %w", symbol, fromID, err)
 	}
 
@@ -239,12 +260,17 @@ func (t *FuturesTrader) GetTradesForSymbolFromID(symbol string, fromID int64, li
 // GetCommissionSymbols returns symbols that have new commission records since lastSyncTime
 // COMMISSION income is generated for every trade, so this is more reliable than REALIZED_PNL
 func (t *FuturesTrader) GetCommissionSymbols(lastSyncTime time.Time) ([]string, error) {
+	if err := checkBinanceRateLimitCooldown(); err != nil {
+		return nil, err
+	}
+
 	incomes, err := t.client.NewGetIncomeHistoryService().
 		IncomeType("COMMISSION").
 		StartTime(lastSyncTime.UnixMilli()).
 		Limit(1000).
-		Do(context.Background())
+		Do(context.Background(), futures.WithRecvWindow(binanceRecvWindowMs))
 	if err != nil {
+		err = recordBinanceAPIError(err)
 		return nil, fmt.Errorf("failed to get commission history: %w", err)
 	}
 
@@ -266,12 +292,17 @@ func (t *FuturesTrader) GetCommissionSymbols(lastSyncTime time.Time) ([]string, 
 // GetPnLSymbols returns symbols that have REALIZED_PNL records since lastSyncTime
 // This is a fallback when COMMISSION detection fails (VIP users, BNB fee discount)
 func (t *FuturesTrader) GetPnLSymbols(lastSyncTime time.Time) ([]string, error) {
+	if err := checkBinanceRateLimitCooldown(); err != nil {
+		return nil, err
+	}
+
 	incomes, err := t.client.NewGetIncomeHistoryService().
 		IncomeType("REALIZED_PNL").
 		StartTime(lastSyncTime.UnixMilli()).
 		Limit(1000).
-		Do(context.Background())
+		Do(context.Background(), futures.WithRecvWindow(binanceRecvWindowMs))
 	if err != nil {
+		err = recordBinanceAPIError(err)
 		return nil, fmt.Errorf("failed to get PnL history: %w", err)
 	}
 

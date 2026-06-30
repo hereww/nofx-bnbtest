@@ -51,6 +51,7 @@ type Agent struct {
 	memory       *session.Memory
 	systemPrompt string
 	userID       string
+	readOnly     bool
 }
 
 // New creates an Agent for one chat session.
@@ -61,6 +62,16 @@ func New(apiPort int, botToken, userID string, getLLM func() mcp.AIClient, syste
 		memory:       session.NewMemory(getLLM()),
 		systemPrompt: systemPrompt,
 		userID:       userID,
+	}
+}
+
+// NewReadOnly creates an isolated group guest agent without account context or API tools.
+func NewReadOnly(getLLM func() mcp.AIClient, systemPrompt string) *Agent {
+	return &Agent{
+		getLLM:       getLLM,
+		memory:       session.NewMemory(getLLM()),
+		systemPrompt: systemPrompt,
+		readOnly:     true,
 	}
 }
 
@@ -196,6 +207,9 @@ func (a *Agent) Run(userMessage string, onChunk func(string)) string {
 	if llm == nil {
 		return "AI assistant unavailable. Please configure an AI model in the Web UI."
 	}
+	if a.readOnly {
+		return a.runReadOnly(llm, userMessage, onChunk)
+	}
 
 	// Build initial user message: prepend account state on first turn, history on subsequent turns.
 	histCtx := a.memory.BuildContext()
@@ -274,6 +288,39 @@ func (a *Agent) Run(userMessage string, onChunk func(string)) string {
 	// Safety: max iterations reached.
 	logger.Warnf("Agent: max iterations (%d) reached for message: %q", maxIterations, userMessage)
 	reply := "Operation completed. Please check your account for the latest status. / 操作已完成，请检查您的账户查看最新状态。"
+	a.memory.Add("user", userMessage)
+	a.memory.Add("assistant", reply)
+	return reply
+}
+
+func (a *Agent) runReadOnly(llm mcp.AIClient, userMessage string, onChunk func(string)) string {
+	histCtx := a.memory.BuildContext()
+	content := userMessage
+	if histCtx != "" {
+		content = histCtx + "\n---\nUser: " + userMessage
+	}
+
+	req, err := mcp.NewRequestBuilder().
+		WithSystemPrompt(a.systemPrompt).
+		AddConversationHistory([]mcp.Message{mcp.NewUserMessage(content)}).
+		Build()
+	if err != nil {
+		logger.Errorf("Read-only group agent: failed to build request: %v", err)
+		return "AI assistant temporarily unavailable. Please try again."
+	}
+
+	resp, err := llm.CallWithRequestFull(req)
+	if err != nil {
+		logger.Errorf("Read-only group agent: LLM call failed: %v", err)
+		return "AI assistant temporarily unavailable. Please try again."
+	}
+	reply := strings.TrimSpace(resp.Content)
+	if reply == "" {
+		reply = "I cannot complete that request. / 我无法完成该请求。"
+	}
+	if onChunk != nil {
+		onChunk(reply)
+	}
 	a.memory.Add("user", userMessage)
 	a.memory.Add("assistant", reply)
 	return reply

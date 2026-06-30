@@ -18,6 +18,18 @@ type Manager struct {
 	userID       string
 	getLLM       func() mcp.AIClient
 	systemPrompt string
+	readOnly     bool
+}
+
+// NewReadOnlyManager creates isolated, tool-free sessions for Telegram group guests.
+func NewReadOnlyManager(getLLM func() mcp.AIClient) *Manager {
+	return &Manager{
+		agents:       make(map[int64]*Agent),
+		lanes:        make(map[int64]chan struct{}),
+		getLLM:       getLLM,
+		systemPrompt: BuildGroupGuestPrompt(),
+		readOnly:     true,
+	}
 }
 
 // NewManager creates a Manager. Call api.GetAPIDocs() before this and pass the result as apiDocs.
@@ -67,7 +79,11 @@ func (m *Manager) getOrCreate(chatID int64) (*Agent, chan struct{}) {
 
 	a, ok := m.agents[chatID]
 	if !ok {
-		a = New(m.apiPort, m.botToken, m.userID, m.getLLM, m.systemPrompt)
+		if m.readOnly {
+			a = NewReadOnly(m.getLLM, m.systemPrompt)
+		} else {
+			a = New(m.apiPort, m.botToken, m.userID, m.getLLM, m.systemPrompt)
+		}
 		m.agents[chatID] = a
 	}
 	lane, ok := m.lanes[chatID]

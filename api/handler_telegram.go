@@ -16,6 +16,8 @@ func (s *Server) handleGetTelegramConfig(c *gin.Context) {
 			"is_bound":     false,
 			"token_masked": "",
 			"username":     "",
+			"group_bound":  false,
+			"group_title":  "",
 		})
 		return
 	}
@@ -37,6 +39,8 @@ func (s *Server) handleGetTelegramConfig(c *gin.Context) {
 		"bound_at":     cfg.BoundAt,
 		"token_masked": tokenMasked,
 		"model_id":     cfg.ModelID,
+		"group_bound":  cfg.GroupChatID != 0,
+		"group_title":  cfg.GroupTitle,
 	})
 }
 

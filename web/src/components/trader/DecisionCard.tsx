@@ -221,14 +221,35 @@ export function DecisionCard({ decision, language, onSymbolClick }: DecisionCard
   const [showSystemPrompt, setShowSystemPrompt] = useState(false)
   const [showInputPrompt, setShowInputPrompt] = useState(false)
   const [showCoT, setShowCoT] = useState(false)
+  const [copyStatus, setCopyStatus] = useState<{ label: string; success: boolean } | null>(null)
 
   // Copy text to clipboard
   const copyToClipboard = async (text: string, label: string) => {
     try {
-      await navigator.clipboard.writeText(text)
-      alert(`${label} copied!`)
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text)
+      } else {
+        const textarea = document.createElement('textarea')
+        textarea.value = text
+        textarea.setAttribute('readonly', '')
+        textarea.style.position = 'fixed'
+        textarea.style.left = '-9999px'
+        textarea.style.top = '0'
+        document.body.appendChild(textarea)
+        textarea.focus()
+        textarea.select()
+        const copied = document.execCommand('copy')
+        document.body.removeChild(textarea)
+        if (!copied) {
+          throw new Error('document.execCommand("copy") returned false')
+        }
+      }
+      setCopyStatus({ label, success: true })
+      window.setTimeout(() => setCopyStatus(null), 1800)
     } catch (err) {
       console.error('Failed to copy:', err)
+      setCopyStatus({ label, success: false })
+      window.setTimeout(() => setCopyStatus(null), 2200)
     }
   }
 
@@ -416,23 +437,59 @@ export function DecisionCard({ decision, language, onSymbolClick }: DecisionCard
         {/* AI Thinking */}
         {decision.cot_trace && (
           <div>
-            <button
-              onClick={() => setShowCoT(!showCoT)}
+            {(() => {
+              const cotLabel = language === 'zh' ? 'AI思维链分析' : 'AI Chain of Thought'
+              const cotCopyStatus = copyStatus?.label === cotLabel ? copyStatus : null
+              return (
+            <div
               className="flex items-center gap-2 text-sm transition-colors w-full justify-between p-2 rounded hover:bg-white/5"
             >
-              <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setShowCoT(!showCoT)}
+                className="flex min-w-0 flex-1 items-center gap-2 text-left"
+              >
                 <span className="text-base">🧠</span>
                 <span className="font-semibold" style={{ color: '#F0B90B' }}>
                   {t('aiThinking', language)}
                 </span>
+              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    copyToClipboard(decision.cot_trace, cotLabel)
+                  }}
+                  className="text-xs px-3 py-1.5 rounded hover:opacity-80 transition-opacity flex items-center gap-1"
+                  style={cotCopyStatus?.success
+                    ? { background: 'rgba(14, 203, 129, 0.18)', color: '#0ECB81', border: '1px solid rgba(14, 203, 129, 0.35)' }
+                    : cotCopyStatus
+                      ? { background: 'rgba(246, 70, 93, 0.16)', color: '#F6465D', border: '1px solid rgba(246, 70, 93, 0.35)' }
+                      : { background: 'rgba(240, 185, 11, 0.2)', color: '#F0B90B', border: '1px solid rgba(240, 185, 11, 0.3)' }}
+                  aria-label={language === 'zh' ? '复制 AI 思维链分析内容' : 'Copy AI chain of thought content'}
+                  title={language === 'zh' ? '复制 AI 思维链分析' : 'Copy AI chain of thought'}
+                >
+                  <span>📋</span>
+                  <span>
+                    {cotCopyStatus
+                      ? cotCopyStatus.success
+                        ? (language === 'zh' ? '已复制' : 'Copied')
+                        : (language === 'zh' ? '失败' : 'Failed')
+                      : (language === 'zh' ? '复制' : 'Copy')}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowCoT(!showCoT)}
+                  className="text-xs px-3 py-1.5 rounded"
+                  style={{ background: 'rgba(240, 185, 11, 0.15)', color: '#F0B90B' }}
+                >
+                  {showCoT ? t('collapse', language) : t('expand', language)}
+                </button>
               </div>
-              <span
-                className="text-xs px-2 py-0.5 rounded"
-                style={{ background: 'rgba(240, 185, 11, 0.15)', color: '#F0B90B' }}
-              >
-                {showCoT ? t('collapse', language) : t('expand', language)}
-              </span>
-            </button>
+            </div>
+              )
+            })()}
             {showCoT && (
               <div
                 className="mt-2 rounded-lg p-4 text-sm font-mono whitespace-pre-wrap max-h-96 overflow-y-auto"
