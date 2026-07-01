@@ -129,7 +129,6 @@ func (s *Server) setupRoutes() {
 		// Market data (no authentication required)
 		s.route(api, "GET", "/klines", "Candlestick data (?symbol=&interval=&limit=)", s.handleKlines)
 		s.route(api, "GET", "/symbols", "Available trading symbols", s.handleSymbols)
-		s.route(api, "GET", "/custom-tokens", "DEX market snapshots for monitored custom token contract addresses", s.handleCustomTokens)
 		s.route(api, "GET", "/data-gateway/*path", "Proxy self-hosted market data gateway", s.handleDataGatewayProxy)
 
 		// Public strategy market (no authentication required)

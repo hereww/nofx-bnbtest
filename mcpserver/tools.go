@@ -232,22 +232,6 @@ func buildTools(client *APIClient, cfg Config) map[string]ToolSpec {
 				return client.Get(ctx, "/api/symbols", query, cfg.DefaultTimeout)
 			},
 		},
-		{
-			Name:        "nofx_get_custom_tokens",
-			Description: "Get DEX market snapshots for monitored or supplied EVM token contract addresses. These are monitor-only and not trade execution symbols.",
-			InputSchema: customTokensSchema(),
-			Handler: func(ctx context.Context, args map[string]any) (any, error) {
-				query := map[string]string{}
-				addresses, err := optionalStringList(args, "addresses")
-				if err != nil {
-					return nil, err
-				}
-				if len(addresses) > 0 {
-					query["addresses"] = strings.Join(addresses, ",")
-				}
-				return client.Get(ctx, "/api/custom-tokens", query, cfg.DefaultTimeout)
-			},
-		},
 	}
 
 	byName := make(map[string]ToolSpec, len(tools))
@@ -354,39 +338,6 @@ func optionalInt(args map[string]any, key string, fallback, min, max int) int {
 	return value
 }
 
-func optionalStringList(args map[string]any, key string) ([]string, error) {
-	raw, ok := args[key]
-	if !ok || raw == nil {
-		return nil, nil
-	}
-	switch v := raw.(type) {
-	case string:
-		if strings.TrimSpace(v) == "" {
-			return nil, nil
-		}
-		return splitCSV(v), nil
-	case []any:
-		out := make([]string, 0, len(v))
-		for _, item := range v {
-			text := strings.TrimSpace(fmt.Sprint(item))
-			if text != "" {
-				out = append(out, text)
-			}
-		}
-		return out, nil
-	case []string:
-		out := make([]string, 0, len(v))
-		for _, item := range v {
-			if text := strings.TrimSpace(item); text != "" {
-				out = append(out, text)
-			}
-		}
-		return out, nil
-	default:
-		return nil, fmt.Errorf("%s must be a string or array of strings", key)
-	}
-}
-
 func splitCSV(value string) []string {
 	parts := strings.Split(value, ",")
 	out := make([]string, 0, len(parts))
@@ -477,22 +428,6 @@ func exchangeOptionalSchema() map[string]any {
 		"type": "object",
 		"properties": map[string]any{
 			"exchange": map[string]any{"type": "string", "default": "hyperliquid"},
-		},
-		"additionalProperties": false,
-	}
-}
-
-func customTokensSchema() map[string]any {
-	return map[string]any{
-		"type": "object",
-		"properties": map[string]any{
-			"addresses": map[string]any{
-				"oneOf": []map[string]any{
-					{"type": "string"},
-					{"type": "array", "items": map[string]any{"type": "string"}},
-				},
-				"description": "Optional EVM token contract address list. Omit to use NOFX defaults.",
-			},
 		},
 		"additionalProperties": false,
 	}

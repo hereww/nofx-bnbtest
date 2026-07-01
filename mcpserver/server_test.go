@@ -45,13 +45,15 @@ func TestMCPInitializeAndToolsList(t *testing.T) {
 	decodeJSON(t, rec.Body.Bytes(), &listResp)
 	listResult := listResp["result"].(map[string]any)
 	tools := listResult["tools"].([]any)
-	if len(tools) != 20 {
-		t.Fatalf("tool count = %d, want 20", len(tools))
+	if len(tools) != 19 {
+		t.Fatalf("tool count = %d, want 19", len(tools))
 	}
-	if !toolListContains(tools, "nofx_strategy_test_run") || !toolListContains(tools, "nofx_get_custom_tokens") {
+	if !toolListContains(tools, "nofx_strategy_test_run") || !toolListContains(tools, "nofx_list_symbols") {
 		t.Fatalf("expected core tools in list: %#v", tools)
 	}
-	if toolListContains(tools, "nofx_analyze_bsc_token") || toolListContains(tools, "nofx_get_bsc_wallet_graph") {
+	if toolListContains(tools, "nofx_analyze_bsc_token") ||
+		toolListContains(tools, "nofx_get_bsc_wallet_graph") ||
+		toolListContains(tools, "nofx_get_custom_tokens") {
 		t.Fatalf("on-chain analysis tools must not be exposed: %#v", tools)
 	}
 	if toolListContains(tools, "execute_trade") || toolListContains(tools, "nofx_start_trader") {

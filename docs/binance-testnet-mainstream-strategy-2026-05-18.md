@@ -4,13 +4,13 @@
 
 ## 测试目标
 
-本次测试按“先用 Binance 测试网支持的主流 USDT 永续合约跑模拟盘”的思路执行，不再把链上代币合约地址当成 Binance 交易对使用。
+本次测试按“先用 Binance 测试网支持的主流 USDT 永续合约跑模拟盘”的思路执行，所有候选标的必须来自交易所可交易 symbol。
 
 核心原则：
 
 - Binance 模拟盘使用的是 Binance USD-M Futures 测试网。
 - 可交易对象必须是 Binance Futures 支持的交易对，例如 `BTCUSDT`。
-- 链上合约地址只适合做 DEX/链上监控，不适合直接提交给 Binance Futures 下单。
+- 不接入合约地址、链上监控或外部 DEX 行情源。
 - 自动交易启动属于高风险动作，本次只完成配置和连接验证，未启动新交易员。
 
 ## 已确认环境
@@ -44,7 +44,7 @@
 策略说明：
 
 ```text
-用于 Binance USD-M Futures 测试网的低风险模拟盘策略；固定监控 BTC/ETH/BNB/SOL/XRP USDT 永续合约，不使用链上合约地址直接下单。
+用于 Binance USD-M Futures 测试网的低风险模拟盘策略；固定监控 BTC/ETH/BNB/SOL/XRP USDT 永续合约。
 ```
 
 固定币种池：
@@ -125,15 +125,11 @@ K 线与指标：
 
 ## 发现的问题
 
-1. 旧的 `自定义代币地址监控员` 当前在线上显示为运行中。
-
-   这个旧交易员绑定的是链上代币地址监控策略，不适合作为 Binance Futures 下单策略。建议后续单独确认是否停止它，避免它继续占用运行资源或产生误解。
-
-2. 新交易员创建时提交了 `is_cross_margin = false`，但读取配置接口返回 `is_cross_margin = true`。
+1. 新交易员创建时提交了 `is_cross_margin = false`，但读取配置接口返回 `is_cross_margin = true`。
 
    这更像是线上接口字段映射、默认值覆盖或保存逻辑问题。由于本次没有启动交易员，所以不会产生实际下单影响；如果后续要正式跑模拟盘，建议先修复或确认保证金模式字段。
 
-3. `show_in_competition = false` 提交后，列表接口仍显示 `show_in_competition = true`。
+2. `show_in_competition = false` 提交后，列表接口仍显示 `show_in_competition = true`。
 
    这同样像是创建接口或列表接口字段保存/读取不一致。它不影响策略交易逻辑，但会影响展示。
 
@@ -141,9 +137,8 @@ K 线与指标：
 
 建议先做 3 步：
 
-1. 确认是否停止旧的 `自定义代币地址监控员`。
-2. 修复或确认 `is_cross_margin`、`show_in_competition` 的保存/读取一致性。
-3. 再启动新的 `币安模拟盘主流币测试员`，观察 1 到 2 个小时的日志、持仓、下单记录和收益曲线。
+1. 修复或确认 `is_cross_margin`、`show_in_competition` 的保存/读取一致性。
+2. 再启动新的 `币安模拟盘主流币测试员`，观察 1 到 2 个小时的日志、持仓、下单记录和收益曲线。
 
 如果要启动新交易员，请明确确认启动以下 ID：
 

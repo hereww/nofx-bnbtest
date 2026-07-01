@@ -16,7 +16,7 @@ func TestNewProxyAwareHTTPClientUsesExplicitProxy(t *testing.T) {
 	if !ok {
 		t.Fatalf("transport = %T, want *http.Transport", client.Transport)
 	}
-	reqURL, _ := url.Parse("https://api.dexscreener.com/token-pairs/v1/bsc/0x812fc5119b772c6c7a66249a559f3614623f4444")
+	reqURL, _ := url.Parse("https://market-data.example.test/v1/tickers/BTCUSDT")
 	req := &http.Request{URL: reqURL}
 	proxyURL, err := transport.Proxy(req)
 	if err != nil {

@@ -5,13 +5,12 @@ import { useLanguage } from '../contexts/LanguageContext'
 import { t } from '../i18n/translations'
 
 type GatewayHealth = {
-  success: boolean
   status: string
-  source: string
-  real_data: boolean
-  last_updated: string
-  providers?: Record<string, { status: string; message?: string; updated_at?: string }>
-  counts?: { coins?: number }
+  service: string
+  symbols: number
+  snapshot_count: number
+  last_refresh: string
+  last_refresh_error?: string
 }
 
 type AI500Response = {
@@ -36,29 +35,14 @@ type NetFlowResponse = {
   }
 }
 
-type CustomToken = {
-  address: string
-  chain_id?: string
-  dex_id?: string
-  name?: string
-  symbol?: string
-  quote_symbol?: string
-  price_usd?: string
-  liquidity_usd?: number
-  volume_24h_usd?: number
-  fdv?: number
-  market_cap?: number
-  pair_url?: string
-  trade_supported: boolean
-  reason?: string
-  error?: string
-}
-
-type CustomTokensResponse = {
+type PriceRankingResponse = {
   success: boolean
-  source: string
-  count: number
-  tokens: CustomToken[]
+  data?: {
+    data?: Record<string, {
+      top?: Array<{ pair: string; price_delta: number; price: number }>
+      low?: Array<{ pair: string; price_delta: number; price: number }>
+    }>
+  }
 }
 
 export function DataPage() {
@@ -68,7 +52,7 @@ export function DataPage() {
   const [ai500, setAI500] = useState<AI500Response['data'] | null>(null)
   const [oi, setOI] = useState<OIResponse['data'] | null>(null)
   const [netflow, setNetflow] = useState<NetFlowResponse['data'] | null>(null)
-  const [customTokens, setCustomTokens] = useState<CustomToken[]>([])
+  const [priceRanking, setPriceRanking] = useState<PriceRankingResponse['data'] | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -83,25 +67,27 @@ export function DataPage() {
         const base = '/api/data-gateway'
         if (!cancelled) setGatewayUrl(base)
 
-        const [healthRes, ai500Res, oiRes, netflowRes, customTokensRes] = await Promise.all([
+        const [healthRes, ai500Res, oiRes, netflowRes, priceRankingRes] = await Promise.all([
           fetch(`${base}/health`),
           fetch(`${base}/api/ai500/list?limit=6`),
           fetch(`${base}/api/oi/top-ranking?duration=1h&limit=5`),
           fetch(`${base}/api/netflow/top-ranking?duration=1h&limit=5&type=institution&trade=future`),
-          fetch('/api/custom-tokens'),
+          fetch(`${base}/api/price/ranking?duration=1h&limit=5`),
         ])
         if (!healthRes.ok) throw new Error(`Gateway health HTTP ${healthRes.status}`)
         const healthJson = (await healthRes.json()) as GatewayHealth
-        const ai500Json = (await ai500Res.json()) as AI500Response
-        const oiJson = (await oiRes.json()) as OIResponse
-        const netflowJson = (await netflowRes.json()) as NetFlowResponse
-        const customTokensJson = (await customTokensRes.json()) as CustomTokensResponse
+        const ai500Json = ai500Res.ok ? (await ai500Res.json()) as AI500Response : { success: false }
+        const oiJson = oiRes.ok ? (await oiRes.json()) as OIResponse : { success: false }
+        const netflowJson = netflowRes.ok ? (await netflowRes.json()) as NetFlowResponse : { success: false }
+        const priceRankingJson = priceRankingRes.ok
+          ? (await priceRankingRes.json()) as PriceRankingResponse
+          : { success: false }
         if (!cancelled) {
           setHealth(healthJson)
           setAI500(ai500Json.data || null)
           setOI(oiJson.data || null)
           setNetflow(netflowJson.data || null)
-          setCustomTokens(customTokensJson.tokens || [])
+          setPriceRanking(priceRankingJson.data || null)
         }
       } catch (err) {
         if (!cancelled) {
@@ -148,9 +134,9 @@ export function DataPage() {
 
         <section className="grid gap-4 md:grid-cols-4">
           <StatusCard label="Gateway" value={loading ? 'checking' : health?.status || 'error'} tone={health?.status === 'ok' ? 'good' : 'warn'} />
-          <StatusCard label="Exchange Public" value={health?.providers?.exchange_public?.status || 'unknown'} tone={health?.providers?.exchange_public?.status === 'ok' ? 'good' : 'warn'} />
-          <StatusCard label="Binance Public" value={health?.providers?.binance?.status || 'unknown'} tone={health?.providers?.binance?.status === 'ok' ? 'good' : 'warn'} />
-          <StatusCard label="Coins" value={String(health?.counts?.coins || ai500?.count || 0)} tone="neutral" />
+          <StatusCard label="Service" value={health?.service || 'unknown'} tone={health?.service ? 'good' : 'warn'} />
+          <StatusCard label="Symbols" value={String(health?.symbols || ai500?.count || 0)} tone="neutral" />
+          <StatusCard label="Snapshots" value={String(health?.snapshot_count || 0)} tone="neutral" />
         </section>
 
         {error && (
@@ -187,84 +173,23 @@ export function DataPage() {
           />
         </section>
 
-        <section className="rounded-lg border border-white/10 bg-white/[0.035] p-5">
-          <div className="flex flex-col gap-3 border-b border-white/10 pb-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h2 className="text-base font-semibold text-white">
-                {language === 'zh' ? '自定义代币监控' : 'Custom Token Monitor'}
-              </h2>
-              <p className="mt-1 text-sm text-zinc-400">
-                {language === 'zh'
-                  ? '按合约地址读取 DEX 行情，用于观察价格、流动性和成交额；这些不是当前 Binance Futures 可直接下单的 symbol。'
-                  : 'Reads DEX market data by contract address for price, liquidity, and volume monitoring. These are not directly tradable Binance Futures symbols.'}
-              </p>
-            </div>
-            <div className="rounded-md border border-amber-300/25 bg-amber-300/10 px-3 py-2 text-xs text-amber-100">
-              {language === 'zh' ? '监控展示，不自动交易' : 'Monitor only, no auto trading'}
-            </div>
-          </div>
-
-          <div className="mt-4 overflow-x-auto">
-            <table className="w-full min-w-[860px] text-left text-sm">
-              <thead className="text-xs uppercase text-zinc-500">
-                <tr className="border-b border-white/10">
-                  <th className="py-3 pr-4 font-medium">{language === 'zh' ? '代币' : 'Token'}</th>
-                  <th className="py-3 pr-4 font-medium">{language === 'zh' ? '链/DEX' : 'Chain / DEX'}</th>
-                  <th className="py-3 pr-4 font-medium">{language === 'zh' ? '价格' : 'Price'}</th>
-                  <th className="py-3 pr-4 font-medium">{language === 'zh' ? '流动性' : 'Liquidity'}</th>
-                  <th className="py-3 pr-4 font-medium">24h Vol</th>
-                  <th className="py-3 pr-4 font-medium">{language === 'zh' ? '状态' : 'Status'}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {customTokens.map((token) => (
-                  <tr key={token.address} className="border-b border-white/[0.06]">
-                    <td className="py-3 pr-4">
-                      <div className="font-medium text-zinc-100">{token.symbol || '-'}</div>
-                      <div className="mt-0.5 max-w-[280px] truncate font-mono text-xs text-zinc-500" title={token.address}>
-                        {token.address}
-                      </div>
-                    </td>
-                    <td className="py-3 pr-4 text-zinc-300">
-                      <div>{token.chain_id || '-'}</div>
-                      <div className="text-xs text-zinc-500">{token.dex_id || '-'}</div>
-                    </td>
-                    <td className="py-3 pr-4 font-mono text-zinc-100">
-                      {token.price_usd ? `$${token.price_usd}` : '-'}
-                    </td>
-                    <td className="py-3 pr-4 text-zinc-300">{formatUSDT(token.liquidity_usd || 0)}</td>
-                    <td className="py-3 pr-4 text-zinc-300">{formatUSDT(token.volume_24h_usd || 0)}</td>
-                    <td className="py-3 pr-4">
-                      {token.error ? (
-                        <span className="rounded bg-red-400/10 px-2 py-1 text-xs text-red-200">{token.error}</span>
-                      ) : (
-                        <span className="rounded bg-cyan-400/10 px-2 py-1 text-xs text-cyan-100">
-                          {language === 'zh' ? '监控中' : 'Monitoring'}
-                        </span>
-                      )}
-                      {token.pair_url && (
-                        <a
-                          href={token.pair_url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="ml-2 text-xs text-[#F0B90B] hover:text-yellow-300"
-                        >
-                          Dex
-                        </a>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-                {customTokens.length === 0 && (
-                  <tr>
-                    <td colSpan={6} className="py-5 text-center text-zinc-500">
-                      {language === 'zh' ? '暂无自定义代币数据' : 'No custom token data'}
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+        <section className="grid gap-4 lg:grid-cols-2">
+          <DataList
+            icon={<TrendingUp className="h-5 w-5" />}
+            title={language === 'zh' ? '1h 涨幅榜' : '1h Gainers'}
+            items={(priceRanking?.data?.['1h']?.top || []).map((item) => ({
+              name: item.pair,
+              value: `${formatPercent(item.price_delta)} / $${item.price.toFixed(4)}`,
+            }))}
+          />
+          <DataList
+            icon={<BarChart3 className="h-5 w-5" />}
+            title={language === 'zh' ? '1h 跌幅榜' : '1h Losers'}
+            items={(priceRanking?.data?.['1h']?.low || []).map((item) => ({
+              name: item.pair,
+              value: `${formatPercent(item.price_delta)} / $${item.price.toFixed(4)}`,
+            }))}
+          />
         </section>
 
         <section className="rounded-lg border border-cyan-400/20 bg-cyan-400/[0.06] p-5">
@@ -276,10 +201,10 @@ export function DataPage() {
               </h2>
               <p className="mt-2 text-sm leading-6 text-cyan-50/80">
                 {health
-                  ? `${language === 'zh' ? '最近更新' : 'Last updated'}: ${health.last_updated || '-'} · ${language === 'zh' ? '来源' : 'Source'}: ${health.source || '-'} · ${language === 'zh' ? '真实数据' : 'Real data'}: ${health.real_data ? 'yes' : 'no'}`
+                  ? `${language === 'zh' ? '最近刷新' : 'Last refresh'}: ${formatDateTime(health.last_refresh)} · ${language === 'zh' ? '来源' : 'Source'}: ${health.service || '-'}${health.last_refresh_error ? ` · ${language === 'zh' ? '采集告警' : 'Refresh warning'}: ${health.last_refresh_error}` : ''}`
                   : loading
                     ? language === 'zh' ? '正在检查数据网关...' : 'Checking data gateway...'
-                    : language === 'zh' ? '请确认 nofx-data-gateway 已启动。' : 'Please make sure nofx-data-gateway is running.'}
+                    : language === 'zh' ? '请确认 NOFX 后端或 nofx-data-gateway 已启动。' : 'Please make sure the NOFX backend or nofx-data-gateway is running.'}
               </p>
               <div className="mt-3 inline-flex items-center gap-2 text-xs text-cyan-100/80">
                 <RefreshCcw className="h-3.5 w-3.5" />
@@ -330,4 +255,15 @@ function formatUSDT(value: number): string {
   if (abs >= 1_000_000) return `${(value / 1_000_000).toFixed(2)}M`
   if (abs >= 1_000) return `${(value / 1_000).toFixed(2)}K`
   return value.toFixed(2)
+}
+
+function formatPercent(value: number): string {
+  return `${(value * 100).toFixed(2)}%`
+}
+
+function formatDateTime(value?: string): string {
+  if (!value || value.startsWith('0001-01-01')) return '-'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  return date.toLocaleString()
 }
