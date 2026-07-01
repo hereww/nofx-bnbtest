@@ -273,7 +273,9 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@master
+        # SECURITY: pinned to a full 40-char commit SHA (v0.36.0); mutable tags
+        # can be re-pointed by an upstream compromise.
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           scan-type: 'fs'
           scan-ref: '.'
@@ -299,7 +301,8 @@ jobs:
           fetch-depth: 0
 
       - name: Run TruffleHog OSS
-        uses: trufflesecurity/trufflehog@main
+        # SECURITY: never use @main for a secret scanner in CI.
+        uses: trufflesecurity/trufflehog@v3.82.13
         with:
           path: ./
           base: ${{ github.event.pull_request.base.sha }}

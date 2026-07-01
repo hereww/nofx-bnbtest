@@ -45,11 +45,14 @@ func TestMCPInitializeAndToolsList(t *testing.T) {
 	decodeJSON(t, rec.Body.Bytes(), &listResp)
 	listResult := listResp["result"].(map[string]any)
 	tools := listResult["tools"].([]any)
-	if len(tools) != 22 {
-		t.Fatalf("tool count = %d, want 22", len(tools))
+	if len(tools) != 20 {
+		t.Fatalf("tool count = %d, want 20", len(tools))
 	}
-	if !toolListContains(tools, "nofx_strategy_test_run") || !toolListContains(tools, "nofx_analyze_bsc_token") {
+	if !toolListContains(tools, "nofx_strategy_test_run") || !toolListContains(tools, "nofx_get_custom_tokens") {
 		t.Fatalf("expected core tools in list: %#v", tools)
+	}
+	if toolListContains(tools, "nofx_analyze_bsc_token") || toolListContains(tools, "nofx_get_bsc_wallet_graph") {
+		t.Fatalf("on-chain analysis tools must not be exposed: %#v", tools)
 	}
 	if toolListContains(tools, "execute_trade") || toolListContains(tools, "nofx_start_trader") {
 		t.Fatalf("high-risk tools must not be exposed: %#v", tools)
@@ -128,8 +131,6 @@ func TestToolCallsForwardToNOFXAPI(t *testing.T) {
 			writeJSON(w, http.StatusOK, []map[string]any{{"symbol": "BTCUSDT", "api_key": "secret-value"}})
 		case "/api/strategies/test-run":
 			writeJSON(w, http.StatusOK, map[string]any{"note": "simulation", "private_key": "hidden"})
-		case "/api/onchain/token-analysis":
-			writeJSON(w, http.StatusOK, map[string]any{"chain": "bsc", "address": r.URL.Query().Get("address")})
 		default:
 			http.NotFound(w, r)
 		}
@@ -144,10 +145,9 @@ func TestToolCallsForwardToNOFXAPI(t *testing.T) {
 		"prompt_variant": "balanced",
 		"run_real_ai":    false,
 	})
-	_ = callTool(t, server, "nofx_analyze_bsc_token", map[string]any{"address": "0x0000000000000000000000000000000000000001"})
 
-	if len(seen) != 4 {
-		t.Fatalf("seen requests = %d, want 4", len(seen))
+	if len(seen) != 3 {
+		t.Fatalf("seen requests = %d, want 3", len(seen))
 	}
 	if seen[0].Path != "/api/my-traders" || seen[0].Auth != "Bearer test-nofx-token" {
 		t.Fatalf("unexpected list request: %#v", seen[0])
@@ -166,9 +166,6 @@ func TestToolCallsForwardToNOFXAPI(t *testing.T) {
 	}
 	if strings.Contains(testRun, "hidden") || !strings.Contains(testRun, redactedValue) {
 		t.Fatalf("test-run response was not redacted: %s", testRun)
-	}
-	if seen[3].Path != "/api/onchain/token-analysis" || seen[3].Query["chain"] != "bsc" || seen[3].Query["depth"] != "recent" {
-		t.Fatalf("unexpected onchain request: %#v", seen[3])
 	}
 }
 

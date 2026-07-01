@@ -29,7 +29,6 @@ type Store struct {
 	order          *OrderStore
 	grid           *GridStore
 	aiCharge       *AIChargeStore
-	onchain        *OnchainStore
 	telegramConfig TelegramConfigStore
 
 	mu sync.RWMutex
@@ -110,26 +109,6 @@ func NewFromGorm(gdb *gorm.DB) (*Store, error) {
 	return &Store{gdb: gdb, db: sqlDB}, nil
 }
 
-// NewOnchainOnly creates a Store with only on-chain analysis tables initialized.
-// It is used by the standalone on-chain indexer so trading, user, and AI tables
-// are not created in the independent index database.
-func NewOnchainOnly(cfg DBConfig) (*Store, error) {
-	gdb, err := InitGormWithConfig(cfg)
-	if err != nil {
-		return nil, fmt.Errorf("failed to open onchain database: %w", err)
-	}
-	sqlDB, err := gdb.DB()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get onchain sql DB: %w", err)
-	}
-	s := &Store{gdb: gdb, db: sqlDB}
-	if err := s.Onchain().initTables(); err != nil {
-		sqlDB.Close()
-		return nil, fmt.Errorf("failed to initialize onchain tables: %w", err)
-	}
-	return s, nil
-}
-
 // NewFromDB creates Store from existing database connection (legacy)
 // Deprecated: Use NewFromGorm instead
 func NewFromDB(db *sql.DB) *Store {
@@ -184,9 +163,6 @@ func (s *Store) initTables() error {
 	}
 	if err := s.AICharge().initTables(); err != nil {
 		return fmt.Errorf("failed to initialize AI charge tables: %w", err)
-	}
-	if err := s.Onchain().initTables(); err != nil {
-		return fmt.Errorf("failed to initialize onchain tables: %w", err)
 	}
 	return nil
 }
@@ -319,16 +295,6 @@ func (s *Store) AICharge() *AIChargeStore {
 		s.aiCharge = NewAIChargeStore(s.gdb)
 	}
 	return s.aiCharge
-}
-
-// Onchain gets on-chain token analysis storage.
-func (s *Store) Onchain() *OnchainStore {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.onchain == nil {
-		s.onchain = NewOnchainStore(s.gdb)
-	}
-	return s.onchain
 }
 
 // TelegramConfig gets Telegram bot configuration storage

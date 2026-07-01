@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"nofx/security"
 	"os"
@@ -33,9 +34,19 @@ type Client struct {
 }
 
 var (
-	defaultClient *Client
-	clientOnce    sync.Once
+	defaultClient          *Client
+	clientOnce             sync.Once
+	embeddedGatewayHandler http.Handler
+	embeddedGatewayMu      sync.RWMutex
 )
+
+// SetEmbeddedGatewayHandler routes NofxOS-compatible requests directly to an
+// in-process data-gateway handler. Passing nil restores normal HTTP transport.
+func SetEmbeddedGatewayHandler(handler http.Handler) {
+	embeddedGatewayMu.Lock()
+	defer embeddedGatewayMu.Unlock()
+	embeddedGatewayHandler = handler
+}
 
 // DefaultClient returns the singleton default client
 func DefaultClient() *Client {
@@ -104,6 +115,10 @@ func (c *Client) doRequest(endpoint string) ([]byte, error) {
 	timeout := c.Timeout
 	c.mu.RUnlock()
 
+	if body, handled, err := doEmbeddedRequest(endpoint, authKey); handled {
+		return body, err
+	}
+
 	target := baseURL + endpoint
 	if err := validateGatewayURL(target); err != nil {
 		return nil, err
@@ -136,6 +151,37 @@ func (c *Client) doRequest(endpoint string) ([]byte, error) {
 	}
 
 	return body, nil
+}
+
+func doEmbeddedRequest(endpoint, authKey string) ([]byte, bool, error) {
+	embeddedGatewayMu.RLock()
+	handler := embeddedGatewayHandler
+	embeddedGatewayMu.RUnlock()
+	if handler == nil {
+		return nil, false, nil
+	}
+	if endpoint == "" {
+		endpoint = "/"
+	}
+	if !strings.HasPrefix(endpoint, "/") {
+		endpoint = "/" + endpoint
+	}
+
+	req := httptest.NewRequest(http.MethodGet, endpoint, nil)
+	req.Header.Set("Accept", "application/json")
+	if strings.TrimSpace(authKey) != "" {
+		req.Header.Set("X-Gateway-Token", strings.TrimSpace(authKey))
+	}
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	body := rec.Body.Bytes()
+	if rec.Code != http.StatusOK {
+		return body, true, &APIError{
+			StatusCode: rec.Code,
+			Message:    string(body),
+		}
+	}
+	return body, true, nil
 }
 
 // failureMessage extracts the API-provided error message from a NofxOS response.

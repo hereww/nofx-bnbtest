@@ -35,7 +35,7 @@ ensure_no_proxy() {
   local key="$1"
   local current value
   current="$(env_value "$key")"
-  for value in localhost 127.0.0.1 ::1 nofx nofx-frontend nofx-data-gateway nofx-onchain-indexer nofx-proxy; do
+  for value in localhost 127.0.0.1 ::1 nofx nofx-frontend nofx-data-gateway nofx-proxy; do
     case ",${current}," in
       *",${value},"*) ;;
       *) current="${current:+${current},}${value}" ;;
@@ -87,7 +87,7 @@ main() {
   [ ! -f data/proxy/sing-box.json ] || cp -a data/proxy/sing-box.json "$backup/sing-box.json"
   install -m 600 "$CONFIG_SOURCE" data/proxy/sing-box.json
 
-  for key in HTTP_PROXY HTTPS_PROXY ALL_PROXY http_proxy https_proxy all_proxy MARKET_HTTP_PROXY ONCHAIN_ARCHIVE_HTTP_PROXY; do
+  for key in HTTP_PROXY HTTPS_PROXY ALL_PROXY http_proxy https_proxy all_proxy MARKET_HTTP_PROXY; do
     set_env_var "$key" "$PROXY_URL"
   done
   set_env_var NOFX_FIXED_PROXY_URL "$PROXY_URL"
@@ -123,7 +123,7 @@ main() {
 
   log "Recreating backend services with fixed proxy environment"
   "${COMPOSE_CMD[@]}" -f docker-compose.yml -f docker-compose.proxy.yml up -d --force-recreate \
-    nofx-data-gateway nofx-onchain-indexer nofx
+    nofx-data-gateway nofx
   wait_backend || fail "backend did not become healthy"
 
   running_after="$(sqlite3 data/data.db 'SELECT COUNT(*) FROM traders WHERE is_running=1;' 2>/dev/null || printf unknown)"

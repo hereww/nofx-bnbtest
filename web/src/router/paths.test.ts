@@ -12,7 +12,6 @@ describe('router paths helpers', () => {
     expect(getCurrentPageForPath(ROUTES.welcome)).toBe('traders')
     expect(getCurrentPageForPath(ROUTES.dashboard)).toBe('trader')
     expect(getCurrentPageForPath(ROUTES.strategyMarket)).toBe('strategy-market')
-    expect(getCurrentPageForPath(ROUTES.onchain)).toBe('onchain')
   })
 
   it('builds dashboard path with optional trader query', () => {
@@ -29,6 +28,5 @@ describe('router paths helpers', () => {
     expect(LEGACY_HASH_ROUTES.trader).toBe(ROUTES.dashboard)
     expect(LEGACY_HASH_ROUTES.details).toBe(ROUTES.dashboard)
     expect(LEGACY_HASH_ROUTES.strategy).toBe(ROUTES.strategy)
-    expect(LEGACY_HASH_ROUTES.onchain).toBe(ROUTES.onchain)
   })
 })

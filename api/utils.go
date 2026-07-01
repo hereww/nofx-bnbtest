@@ -36,16 +36,18 @@ func SanitizeModelConfigForLog(models map[string]struct {
 
 // SanitizeExchangeConfigForLog Sanitize exchange configuration for log output
 func SanitizeExchangeConfigForLog(exchanges map[string]struct {
-	Enabled               bool   `json:"enabled"`
-	APIKey                string `json:"api_key"`
-	SecretKey             string `json:"secret_key"`
-	Testnet               bool   `json:"testnet"`
-	HyperliquidWalletAddr string `json:"hyperliquid_wallet_addr"`
-	AsterUser             string `json:"aster_user"`
-	AsterSigner           string `json:"aster_signer"`
-	AsterPrivateKey       string `json:"aster_private_key"`
-	LighterWalletAddr     string `json:"lighter_wallet_addr"`
-	LighterPrivateKey     string `json:"lighter_private_key"`
+	Enabled                 bool   `json:"enabled"`
+	APIKey                  string `json:"api_key"`
+	SecretKey               string `json:"secret_key"`
+	Passphrase              string `json:"passphrase"`
+	Testnet                 bool   `json:"testnet"`
+	HyperliquidWalletAddr   string `json:"hyperliquid_wallet_addr"`
+	AsterUser               string `json:"aster_user"`
+	AsterSigner             string `json:"aster_signer"`
+	AsterPrivateKey         string `json:"aster_private_key"`
+	LighterWalletAddr       string `json:"lighter_wallet_addr"`
+	LighterPrivateKey       string `json:"lighter_private_key"`
+	LighterAPIKeyPrivateKey string `json:"lighter_api_key_private_key"`
 }) map[string]interface{} {
 	safe := make(map[string]interface{})
 	for exchangeID, cfg := range exchanges {
@@ -61,11 +63,17 @@ func SanitizeExchangeConfigForLog(exchanges map[string]struct {
 		if cfg.SecretKey != "" {
 			safeExchange["secret_key"] = MaskSensitiveString(cfg.SecretKey)
 		}
+		if cfg.Passphrase != "" {
+			safeExchange["passphrase"] = MaskSensitiveString(cfg.Passphrase)
+		}
 		if cfg.AsterPrivateKey != "" {
 			safeExchange["aster_private_key"] = MaskSensitiveString(cfg.AsterPrivateKey)
 		}
 		if cfg.LighterPrivateKey != "" {
 			safeExchange["lighter_private_key"] = MaskSensitiveString(cfg.LighterPrivateKey)
+		}
+		if cfg.LighterAPIKeyPrivateKey != "" {
+			safeExchange["lighter_api_key_private_key"] = MaskSensitiveString(cfg.LighterAPIKeyPrivateKey)
 		}
 
 		// Add non-sensitive fields directly

@@ -1,11 +1,18 @@
 package config
 
 import (
+	"fmt"
 	"nofx/mcp"
 	"nofx/telemetry"
 	"os"
 	"strconv"
 	"strings"
+	"time"
+)
+
+const (
+	insecureDefaultJWTSecret = "default-jwt-secret-change-in-production"
+	minJWTSecretLength       = 32
 )
 
 // Global configuration instance
@@ -39,64 +46,48 @@ type Config struct {
 	ExperienceImprovement bool
 
 	// Market data provider API keys
-	AlpacaAPIKey     string // Alpaca API key for US stocks
-	AlpacaSecretKey  string // Alpaca secret key
-	TwelveDataKey    string // TwelveData API key for forex & metals
-	DataGatewayURL   string // Self-hosted NofxOS-compatible data gateway
-	DataGatewayToken string // Optional token for the self-hosted data gateway
-	MarketHTTPProxy  string // Optional explicit proxy for market/on-chain data APIs
-
-	// On-chain token analysis
-	OnchainIndexerEnabled                 bool
-	OnchainIndexerURL                     string
-	OnchainIndexerAddr                    string
-	OnchainIndexerDBPath                  string
-	OnchainBSCArchiveRPCURL               string
-	OnchainArchiveHTTPProxy               string
-	OnchainIndexerPollIntervalSeconds     int
-	OnchainIndexerBatchBlocks             int
-	OnchainFreeIndexerEnabled             bool
-	OnchainFreeRPCURLs                    []string
-	OnchainFreeBackfillMaxRequestsPerTick int
-	OnchainFreeBackfillTargetSeeds        int
-	OnchainFreeLogSource                  string
-	OnchainGeckoTradesLimit               int
-	OnchainEtherscanAPIKey                string
-	OnchainEtherscanBaseURL               string
-	OnchainFreeLogsRPS                    int
-	OnchainFreeLogsDailyBudget            int
-	OnchainLogPageSize                    int
-	OnchainEarlyWindowBlocks              int64
+	AlpacaAPIKey               string        // Alpaca API key for US stocks
+	AlpacaSecretKey            string        // Alpaca secret key
+	TwelveDataKey              string        // TwelveData API key for forex & metals
+	DataGatewayURL             string        // Self-hosted NofxOS-compatible data gateway
+	DataGatewayToken           string        // Optional token for the self-hosted data gateway
+	DataGatewayEmbedded        bool          // Run the NofxOS-compatible data gateway inside the NOFX backend
+	DataGatewayDBPath          string        // SQLite database file for the embedded data gateway
+	DataGatewayRefreshInterval time.Duration // Refresh interval for the embedded data gateway
+	MarketHTTPProxy            string        // Optional explicit proxy for market data APIs
 }
 
-// Init initializes global configuration (from .env)
+// MustInit initializes global configuration or panics. Use it from main so the
+// server refuses to start under a known or weak JWT signing secret.
+func MustInit() {
+	if err := initConfig(true); err != nil {
+		panic(fmt.Sprintf("config: %v", err))
+	}
+}
+
+// Init initializes global configuration (from .env). It preserves historical
+// fail-soft behavior for tests and local tools; main uses MustInit.
 func Init() {
+	if err := initConfig(false); err != nil {
+		fmt.Fprintf(os.Stderr, "config init failed: %v\n", err)
+	}
+}
+
+func initConfig(strictJWT bool) error {
 	cfg := &Config{
-		APIServerPort:         8080,
-		ExperienceImprovement: true, // Default: enabled to help improve the product
+		APIServerPort:              8080,
+		ExperienceImprovement:      true, // Default: enabled to help improve the product
+		DataGatewayEmbedded:        true,
+		DataGatewayDBPath:          "data/data-gateway.db",
+		DataGatewayRefreshInterval: time.Minute,
 		// Database defaults
-		DBType:                                "sqlite",
-		DBPath:                                "data/data.db",
-		DBHost:                                "localhost",
-		DBPort:                                5432,
-		DBUser:                                "postgres",
-		DBName:                                "nofx",
-		DBSSLMode:                             "disable",
-		OnchainIndexerPollIntervalSeconds:     15,
-		OnchainIndexerBatchBlocks:             100,
-		OnchainIndexerAddr:                    ":8091",
-		OnchainIndexerDBPath:                  "data/onchain-indexer.db",
-		OnchainFreeIndexerEnabled:             true,
-		OnchainFreeRPCURLs:                    []string{"https://bsc-rpc.publicnode.com", "https://binance.llamarpc.com", "https://bsc-dataseed.binance.org", "https://bsc-dataseed1.binance.org", "https://bsc-dataseed2.binance.org"},
-		OnchainFreeBackfillMaxRequestsPerTick: 200,
-		OnchainFreeBackfillTargetSeeds:        100,
-		OnchainFreeLogSource:                  "etherscan,gecko",
-		OnchainGeckoTradesLimit:               300,
-		OnchainEtherscanBaseURL:               "https://api.etherscan.io/v2/api",
-		OnchainFreeLogsRPS:                    2,
-		OnchainFreeLogsDailyBudget:            90000,
-		OnchainLogPageSize:                    1000,
-		OnchainEarlyWindowBlocks:              100000,
+		DBType:    "sqlite",
+		DBPath:    "data/data.db",
+		DBHost:    "localhost",
+		DBPort:    5432,
+		DBUser:    "postgres",
+		DBName:    "nofx",
+		DBSSLMode: "disable",
 	}
 
 	// Load from environment variables
@@ -104,7 +95,15 @@ func Init() {
 		cfg.JWTSecret = strings.TrimSpace(v)
 	}
 	if cfg.JWTSecret == "" {
-		cfg.JWTSecret = "default-jwt-secret-change-in-production"
+		cfg.JWTSecret = insecureDefaultJWTSecret
+	}
+	if strictJWT {
+		if cfg.JWTSecret == insecureDefaultJWTSecret {
+			return fmt.Errorf("JWT_SECRET is required and must not use the insecure default")
+		}
+		if len(cfg.JWTSecret) < minJWTSecretLength {
+			return fmt.Errorf("JWT_SECRET must be at least %d bytes", minJWTSecretLength)
+		}
 	}
 
 	if v := os.Getenv("API_SERVER_PORT"); v != "" {
@@ -134,77 +133,18 @@ func Init() {
 		cfg.DataGatewayURL = "http://127.0.0.1:8090"
 	}
 	cfg.DataGatewayToken = strings.TrimSpace(os.Getenv("DATA_GATEWAY_TOKEN"))
+	if v := os.Getenv("DATA_GATEWAY_EMBEDDED"); v != "" {
+		cfg.DataGatewayEmbedded = strings.ToLower(strings.TrimSpace(v)) != "false"
+	}
+	if v := strings.TrimSpace(os.Getenv("DATA_GATEWAY_DB_PATH")); v != "" {
+		cfg.DataGatewayDBPath = v
+	}
+	if v := strings.TrimSpace(os.Getenv("DATA_GATEWAY_REFRESH_INTERVAL")); v != "" {
+		if d, err := time.ParseDuration(v); err == nil && d > 0 {
+			cfg.DataGatewayRefreshInterval = d
+		}
+	}
 	cfg.MarketHTTPProxy = strings.TrimSpace(os.Getenv("MARKET_HTTP_PROXY"))
-	if v := os.Getenv("ONCHAIN_INDEXER_ENABLED"); v != "" {
-		cfg.OnchainIndexerEnabled = strings.ToLower(strings.TrimSpace(v)) == "true"
-	}
-	cfg.OnchainIndexerURL = strings.TrimRight(strings.TrimSpace(os.Getenv("ONCHAIN_INDEXER_URL")), "/")
-	if v := strings.TrimSpace(os.Getenv("ONCHAIN_INDEXER_ADDR")); v != "" {
-		cfg.OnchainIndexerAddr = v
-	}
-	if v := strings.TrimSpace(os.Getenv("ONCHAIN_INDEXER_DB_PATH")); v != "" {
-		cfg.OnchainIndexerDBPath = v
-	}
-	cfg.OnchainBSCArchiveRPCURL = strings.TrimSpace(os.Getenv("ONCHAIN_BSC_ARCHIVE_RPC_URL"))
-	cfg.OnchainArchiveHTTPProxy = strings.TrimSpace(os.Getenv("ONCHAIN_ARCHIVE_HTTP_PROXY"))
-	if v := os.Getenv("ONCHAIN_FREE_INDEXER_ENABLED"); v != "" {
-		cfg.OnchainFreeIndexerEnabled = strings.ToLower(strings.TrimSpace(v)) == "true"
-	}
-	if v := strings.TrimSpace(os.Getenv("ONCHAIN_FREE_RPC_URLS")); v != "" {
-		cfg.OnchainFreeRPCURLs = splitCSVEnv(v)
-	}
-	if v := os.Getenv("ONCHAIN_INDEXER_POLL_INTERVAL_SECONDS"); v != "" {
-		if seconds, err := strconv.Atoi(v); err == nil && seconds > 0 {
-			cfg.OnchainIndexerPollIntervalSeconds = seconds
-		}
-	}
-	if v := os.Getenv("ONCHAIN_INDEXER_BATCH_BLOCKS"); v != "" {
-		if blocks, err := strconv.Atoi(v); err == nil && blocks > 0 {
-			cfg.OnchainIndexerBatchBlocks = blocks
-		}
-	}
-	if v := os.Getenv("ONCHAIN_FREE_BACKFILL_MAX_REQUESTS_PER_TICK"); v != "" {
-		if requests, err := strconv.Atoi(v); err == nil && requests > 0 {
-			cfg.OnchainFreeBackfillMaxRequestsPerTick = requests
-		}
-	}
-	if v := os.Getenv("ONCHAIN_FREE_BACKFILL_TARGET_SEEDS"); v != "" {
-		if seeds, err := strconv.Atoi(v); err == nil && seeds > 0 {
-			cfg.OnchainFreeBackfillTargetSeeds = seeds
-		}
-	}
-	if v := strings.TrimSpace(os.Getenv("ONCHAIN_FREE_LOG_SOURCE")); v != "" {
-		cfg.OnchainFreeLogSource = strings.ToLower(v)
-	}
-	if v := os.Getenv("ONCHAIN_GECKO_TRADES_LIMIT"); v != "" {
-		if limit, err := strconv.Atoi(v); err == nil && limit > 0 {
-			cfg.OnchainGeckoTradesLimit = limit
-		}
-	}
-	cfg.OnchainEtherscanAPIKey = strings.TrimSpace(os.Getenv("ONCHAIN_ETHERSCAN_API_KEY"))
-	if v := strings.TrimSpace(os.Getenv("ONCHAIN_ETHERSCAN_BASE_URL")); v != "" {
-		cfg.OnchainEtherscanBaseURL = strings.TrimRight(v, "/")
-	}
-	if v := os.Getenv("ONCHAIN_FREE_LOGS_RPS"); v != "" {
-		if rps, err := strconv.Atoi(v); err == nil && rps > 0 {
-			cfg.OnchainFreeLogsRPS = rps
-		}
-	}
-	if v := os.Getenv("ONCHAIN_FREE_LOGS_DAILY_BUDGET"); v != "" {
-		if budget, err := strconv.Atoi(v); err == nil && budget > 0 {
-			cfg.OnchainFreeLogsDailyBudget = budget
-		}
-	}
-	if v := os.Getenv("ONCHAIN_LOG_PAGE_SIZE"); v != "" {
-		if pageSize, err := strconv.Atoi(v); err == nil && pageSize > 0 {
-			cfg.OnchainLogPageSize = pageSize
-		}
-	}
-	if v := os.Getenv("ONCHAIN_EARLY_WINDOW_BLOCKS"); v != "" {
-		if blocks, err := strconv.ParseInt(v, 10, 64); err == nil && blocks > 0 {
-			cfg.OnchainEarlyWindowBlocks = blocks
-		}
-	}
 
 	// Database configuration
 	if v := os.Getenv("DB_TYPE"); v != "" {
@@ -249,6 +189,7 @@ func Init() {
 			OutputTokens:  usage.CompletionTokens,
 		})
 	}
+	return nil
 }
 
 // Get returns the global configuration
@@ -257,28 +198,4 @@ func Get() *Config {
 		Init()
 	}
 	return global
-}
-
-func firstNonEmptyEnv(keys ...string) string {
-	for _, key := range keys {
-		if value := strings.TrimSpace(os.Getenv(key)); value != "" {
-			return value
-		}
-	}
-	return ""
-}
-
-func splitCSVEnv(value string) []string {
-	parts := strings.Split(value, ",")
-	out := make([]string, 0, len(parts))
-	seen := map[string]bool{}
-	for _, part := range parts {
-		part = strings.TrimSpace(part)
-		if part == "" || seen[part] {
-			continue
-		}
-		seen[part] = true
-		out = append(out, part)
-	}
-	return out
 }

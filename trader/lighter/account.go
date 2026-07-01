@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"nofx/logger"
+	"nofx/trader/types"
 	"strconv"
 	"strings"
 )
@@ -94,8 +95,8 @@ func (t *LighterTraderV2) GetBalance() (map[string]interface{}, error) {
 	// Return in standard format compatible with auto_types.go
 	// (totalEquity = totalWalletBalance + totalUnrealizedProfit)
 	return map[string]interface{}{
-		"totalWalletBalance":    walletBalance,           // Wallet balance (excluding unrealized PnL)
-		"totalUnrealizedProfit": balance.UnrealizedPnL,   // Unrealized PnL
+		"totalWalletBalance":    walletBalance,            // Wallet balance (excluding unrealized PnL)
+		"totalUnrealizedProfit": balance.UnrealizedPnL,    // Unrealized PnL
 		"availableBalance":      balance.AvailableBalance, // Available balance
 		// Keep additional fields for reference
 		"total_equity":       balance.TotalEquity,
@@ -113,11 +114,26 @@ func (t *LighterTraderV2) GetAccountBalance() (*AccountBalance, error) {
 	}
 
 	// Parse string values to float64
-	availableBalance, _ := strconv.ParseFloat(accountInfo.AvailableBalance, 64)
-	collateral, _ := strconv.ParseFloat(accountInfo.Collateral, 64)
-	crossAssetValue, _ := strconv.ParseFloat(accountInfo.CrossAssetValue, 64)
-	totalEquity, _ := strconv.ParseFloat(accountInfo.TotalEquity, 64)
-	unrealizedPnl, _ := strconv.ParseFloat(accountInfo.UnrealizedPnl, 64)
+	availableBalance, err := types.ParseFloatField("available_balance", accountInfo.AvailableBalance)
+	if err != nil {
+		return nil, err
+	}
+	collateral, err := types.ParseFloatField("collateral", accountInfo.Collateral)
+	if err != nil {
+		return nil, err
+	}
+	crossAssetValue, err := types.ParseFloatField("cross_asset_value", accountInfo.CrossAssetValue)
+	if err != nil {
+		return nil, err
+	}
+	totalEquity, err := types.ParseFloatField("total_equity", accountInfo.TotalEquity)
+	if err != nil {
+		return nil, err
+	}
+	unrealizedPnl, err := types.ParseFloatField("unrealized_pnl", accountInfo.UnrealizedPnl)
+	if err != nil {
+		return nil, err
+	}
 
 	// Use collateral as total equity if total_equity is 0
 	if totalEquity == 0 {
@@ -205,7 +221,7 @@ func (t *LighterTraderV2) GetPositionsRaw(symbol string) ([]Position, error) {
 		}
 
 		// Parse fields from Lighter API response
-		size, _ := strconv.ParseFloat(lPos.Position, 64)        // API returns "position" not "size"
+		size, _ := strconv.ParseFloat(lPos.Position, 64)            // API returns "position" not "size"
 		entryPrice, _ := strconv.ParseFloat(lPos.AvgEntryPrice, 64) // API returns "avg_entry_price"
 		positionValue, _ := strconv.ParseFloat(lPos.PositionValue, 64)
 		liqPrice, _ := strconv.ParseFloat(lPos.LiquidationPrice, 64)

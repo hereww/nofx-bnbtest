@@ -227,7 +227,11 @@ func NewAutoTrader(config AutoTraderConfig, st *store.Store, userID string) (*Au
 		mcpClient = mcp.New()
 	}
 
-	mcpClient.SetAPIKey(apiKey, customURL, config.CustomModelName)
+	if aiModel == "claw402" {
+		mcpClient.SetAPIKey(apiKey, "", config.CustomModelName)
+	} else {
+		mcpClient.SetAPIKey(apiKey, customURL, config.CustomModelName)
+	}
 	logger.Infof("🤖 [%s] Using %s AI", config.Name, aiModel)
 
 	if config.CustomAPIURL != "" || config.CustomModelName != "" {
@@ -403,7 +407,7 @@ func (at *AutoTrader) Run() error {
 	// Start Lighter order sync if using Lighter exchange
 	if at.exchange == "lighter" {
 		if lighterTrader, ok := at.trader.(*lighter.LighterTraderV2); ok && at.store != nil {
-			lighterTrader.StartOrderSync(at.id, at.exchangeID, at.exchange, at.store, 30*time.Second)
+			lighterTrader.StartOrderSync(at.id, at.exchangeID, at.exchange, at.store, 30*time.Second, at.stopMonitorCh)
 			at.logInfof("🔄 Lighter order+position sync enabled (every 30s)")
 		}
 	}
@@ -411,7 +415,7 @@ func (at *AutoTrader) Run() error {
 	// Start Hyperliquid order sync if using Hyperliquid exchange
 	if at.exchange == "hyperliquid" {
 		if hyperliquidTrader, ok := at.trader.(*hyperliquid.HyperliquidTrader); ok && at.store != nil {
-			hyperliquidTrader.StartOrderSync(at.id, at.exchangeID, at.exchange, at.store, 30*time.Second)
+			hyperliquidTrader.StartOrderSync(at.id, at.exchangeID, at.exchange, at.store, 30*time.Second, at.stopMonitorCh)
 			at.logInfof("🔄 Hyperliquid order+position sync enabled (every 30s)")
 		}
 	}
@@ -419,7 +423,7 @@ func (at *AutoTrader) Run() error {
 	// Start Bybit order sync if using Bybit exchange
 	if at.exchange == "bybit" {
 		if bybitTrader, ok := at.trader.(*bybit.BybitTrader); ok && at.store != nil {
-			bybitTrader.StartOrderSync(at.id, at.exchangeID, at.exchange, at.store, 30*time.Second)
+			bybitTrader.StartOrderSync(at.id, at.exchangeID, at.exchange, at.store, 30*time.Second, at.stopMonitorCh)
 			at.logInfof("🔄 Bybit order+position sync enabled (every 30s)")
 		}
 	}
@@ -427,7 +431,7 @@ func (at *AutoTrader) Run() error {
 	// Start OKX order sync if using OKX exchange
 	if at.exchange == "okx" {
 		if okxTrader, ok := at.trader.(*okx.OKXTrader); ok && at.store != nil {
-			okxTrader.StartOrderSync(at.id, at.exchangeID, at.exchange, at.store, 30*time.Second)
+			okxTrader.StartOrderSync(at.id, at.exchangeID, at.exchange, at.store, 30*time.Second, at.stopMonitorCh)
 			at.logInfof("🔄 OKX order+position sync enabled (every 30s)")
 		}
 	}
@@ -435,7 +439,7 @@ func (at *AutoTrader) Run() error {
 	// Start Bitget order sync if using Bitget exchange
 	if at.exchange == "bitget" {
 		if bitgetTrader, ok := at.trader.(*bitget.BitgetTrader); ok && at.store != nil {
-			bitgetTrader.StartOrderSync(at.id, at.exchangeID, at.exchange, at.store, 30*time.Second)
+			bitgetTrader.StartOrderSync(at.id, at.exchangeID, at.exchange, at.store, 30*time.Second, at.stopMonitorCh)
 			at.logInfof("🔄 Bitget order+position sync enabled (every 30s)")
 		}
 	}
@@ -443,7 +447,7 @@ func (at *AutoTrader) Run() error {
 	// Start Aster order sync if using Aster exchange
 	if at.exchange == "aster" {
 		if asterTrader, ok := at.trader.(*aster.AsterTrader); ok && at.store != nil {
-			asterTrader.StartOrderSync(at.id, at.exchangeID, at.exchange, at.store, 30*time.Second)
+			asterTrader.StartOrderSync(at.id, at.exchangeID, at.exchange, at.store, 30*time.Second, at.stopMonitorCh)
 			at.logInfof("🔄 Aster order+position sync enabled (every 30s)")
 		}
 	}
@@ -451,7 +455,7 @@ func (at *AutoTrader) Run() error {
 	// Start Binance order sync if using Binance exchange
 	if at.exchange == "binance" {
 		if binanceTrader, ok := at.trader.(*binance.FuturesTrader); ok && at.store != nil {
-			binanceTrader.StartOrderSync(at.id, at.exchangeID, at.exchange, at.store, 2*time.Minute)
+			binanceTrader.StartOrderSync(at.id, at.exchangeID, at.exchange, at.store, 2*time.Minute, at.stopMonitorCh)
 			at.logInfof("🔄 Binance order+position sync enabled (every 2m)")
 		}
 	}
@@ -459,7 +463,7 @@ func (at *AutoTrader) Run() error {
 	// Start Gate order sync if using Gate exchange
 	if at.exchange == "gate" {
 		if gateTrader, ok := at.trader.(*gate.GateTrader); ok && at.store != nil {
-			gateTrader.StartOrderSync(at.id, at.exchangeID, at.exchange, at.store, 30*time.Second)
+			gateTrader.StartOrderSync(at.id, at.exchangeID, at.exchange, at.store, 30*time.Second, at.stopMonitorCh)
 			at.logInfof("🔄 Gate order+position sync enabled (every 30s)")
 		}
 	}
@@ -467,7 +471,7 @@ func (at *AutoTrader) Run() error {
 	// Start KuCoin order sync if using KuCoin exchange
 	if at.exchange == "kucoin" {
 		if kucoinTrader, ok := at.trader.(*kucoin.KuCoinTrader); ok && at.store != nil {
-			kucoinTrader.StartOrderSync(at.id, at.exchangeID, at.exchange, at.store, 30*time.Second)
+			kucoinTrader.StartOrderSync(at.id, at.exchangeID, at.exchange, at.store, 30*time.Second, at.stopMonitorCh)
 			at.logInfof("🔄 KuCoin order+position sync enabled (every 30s)")
 		}
 	}

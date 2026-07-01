@@ -225,7 +225,7 @@ NOFX is on a mission to become the **Universal AI Trading Operating System** for
 
 - [ ] Multi-Agent orchestration (specialized agents with dynamic coordination)
 - [ ] Reinforcement Learning (DQN, PPO, transfer learning)
-- [ ] Alternative data integration (social sentiment, news, on-chain analytics)
+- [ ] Alternative data integration (social sentiment, news)
 
 ---
 

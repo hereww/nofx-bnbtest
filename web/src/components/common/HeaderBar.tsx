@@ -130,17 +130,6 @@ export default function HeaderBar({
                   requiresAuth: false,
                 },
                 {
-                  page: 'onchain',
-                  path: ROUTES.onchain,
-                  label:
-                    language === 'zh'
-                      ? '链上分析'
-                      : language === 'id'
-                        ? 'On-chain'
-                        : 'On-chain',
-                  requiresAuth: false,
-                },
-                {
                   page: 'strategy-market',
                   path: ROUTES.strategyMarket,
                   label:
@@ -473,17 +462,6 @@ export default function HeaderBar({
                           : language === 'id'
                             ? 'Data'
                             : 'Data',
-                      requiresAuth: false,
-                    },
-                    {
-                      page: 'onchain',
-                      path: ROUTES.onchain,
-                      label:
-                        language === 'zh'
-                          ? '链上分析'
-                          : language === 'id'
-                            ? 'On-chain'
-                            : 'On-chain',
                       requiresAuth: false,
                     },
                     {

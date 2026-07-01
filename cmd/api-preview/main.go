@@ -28,9 +28,6 @@ func main() {
 	if os.Getenv("DB_PATH") == "" {
 		cfg.DBPath = filepath.Join(os.TempDir(), "nofx-api-preview.db")
 	}
-	if os.Getenv("ONCHAIN_INDEXER_ENABLED") == "" {
-		cfg.OnchainIndexerEnabled = false
-	}
 
 	cryptoService, err := crypto.NewCryptoService()
 	if err != nil {

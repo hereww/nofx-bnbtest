@@ -18,16 +18,16 @@ const (
 
 // Candle represents a single OHLCV candle from Hyperliquid
 type Candle struct {
-	OpenTime   int64   `json:"t"`  // Open time in milliseconds
-	CloseTime  int64   `json:"T"`  // Close time in milliseconds
-	Symbol     string  `json:"s"`  // Coin symbol
-	Interval   string  `json:"i"`  // Interval
-	Open       string  `json:"o"`  // Open price
-	High       string  `json:"h"`  // High price
-	Low        string  `json:"l"`  // Low price
-	Close      string  `json:"c"`  // Close price
-	Volume     string  `json:"v"`  // Volume in base unit
-	TradeCount int     `json:"n"`  // Number of trades
+	OpenTime   int64  `json:"t"` // Open time in milliseconds
+	CloseTime  int64  `json:"T"` // Close time in milliseconds
+	Symbol     string `json:"s"` // Coin symbol
+	Interval   string `json:"i"` // Interval
+	Open       string `json:"o"` // Open price
+	High       string `json:"h"` // High price
+	Low        string `json:"l"` // Low price
+	Close      string `json:"c"` // Close price
+	Volume     string `json:"v"` // Volume in base unit
+	TradeCount int    `json:"n"` // Number of trades
 }
 
 // CandleRequest represents the request for candleSnapshot
@@ -230,9 +230,9 @@ type Meta struct {
 
 // AssetInfo represents information about a single asset
 type AssetInfo struct {
-	Name       string `json:"name"`
-	SzDecimals int    `json:"szDecimals"`
-	MaxLeverage int   `json:"maxLeverage"`
+	Name        string `json:"name"`
+	SzDecimals  int    `json:"szDecimals"`
+	MaxLeverage int    `json:"maxLeverage"`
 }
 
 // NormalizeCoin normalizes coin name for Hyperliquid API
@@ -340,8 +340,16 @@ var StockPerpsSymbols = []string{
 	"COST",  // Costco
 	"LLY",   // Eli Lilly
 	"CRCL",  // Circle (new)
+	"SMSN",  // Samsung
 	"SKHX",  // Skyward (new)
 	"SNDK",  // Sandisk (new)
+}
+
+var xyzSymbolAliases = map[string]string{
+	"SAMSUNG":  "SMSN",
+	"SK-HYNIX": "SKHX",
+	"SKHYNIX":  "SKHX",
+	"TESLA":    "TSLA",
 }
 
 // Forex and commodities on xyz dex
@@ -384,21 +392,25 @@ func IsXYZAsset(symbol string) bool {
 
 // NormalizeCoinBase removes common suffixes to get base symbol
 func NormalizeCoinBase(symbol string) string {
+	symbol = strings.ToUpper(strings.TrimSpace(symbol))
 	// Remove xyz: prefix if present
-	if strings.HasPrefix(symbol, "xyz:") {
-		return strings.TrimPrefix(symbol, "xyz:")
+	if strings.HasPrefix(strings.ToLower(symbol), "xyz:") {
+		symbol = symbol[4:]
 	}
 	// Remove -USDC suffix
 	if strings.HasSuffix(symbol, "-USDC") {
-		return strings.TrimSuffix(symbol, "-USDC")
+		symbol = strings.TrimSuffix(symbol, "-USDC")
 	}
 	// Remove USDT suffix
 	if strings.HasSuffix(symbol, "USDT") {
-		return strings.TrimSuffix(symbol, "USDT")
+		symbol = strings.TrimSuffix(symbol, "USDT")
 	}
 	// Remove USD suffix
 	if strings.HasSuffix(symbol, "USD") {
-		return strings.TrimSuffix(symbol, "USD")
+		symbol = strings.TrimSuffix(symbol, "USD")
+	}
+	if alias, ok := xyzSymbolAliases[symbol]; ok {
+		return alias
 	}
 	return symbol
 }

@@ -1,12 +1,15 @@
 package api
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
 
 	"nofx/config"
+	"nofx/datagateway"
 	"nofx/store"
 )
 
@@ -69,5 +72,43 @@ func TestDataGatewayProxyForwardsToken(t *testing.T) {
 	}
 	if gotToken != "proxy-secret" {
 		t.Fatalf("token not forwarded: %q", gotToken)
+	}
+}
+
+func TestDataGatewayProxyUsesEmbeddedGatewayWhenConfigured(t *testing.T) {
+	config.Init()
+	config.Get().DataGatewayToken = "embedded-secret"
+	config.Get().DataGatewayURL = "http://unreachable.example"
+
+	st, err := store.New(":memory:")
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	defer st.Close()
+
+	dgStore, err := datagateway.OpenStore(t.TempDir() + "/data-gateway.db")
+	if err != nil {
+		t.Fatalf("open data gateway store: %v", err)
+	}
+	dgSvc := datagateway.NewService(datagateway.Config{Token: "embedded-secret"}, dgStore)
+	handler := datagateway.NewRouter(dgSvc, "embedded-secret")
+
+	_, cancel := context.WithCancel(context.Background())
+	srv := NewServer(nil, st, nil, 0)
+	srv.EnableEmbeddedDataGateway(dgStore, dgSvc, handler, cancel)
+	defer func() {
+		if err := srv.Shutdown(); err != nil {
+			t.Fatalf("shutdown: %v", err)
+		}
+	}()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/data-gateway/health", nil)
+	rec := httptest.NewRecorder()
+	srv.router.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("embedded gateway status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	if body := rec.Body.String(); !strings.Contains(body, `"service":"nofx-data-gateway"`) {
+		t.Fatalf("unexpected embedded gateway body: %s", body)
 	}
 }

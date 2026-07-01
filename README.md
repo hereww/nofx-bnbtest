@@ -32,7 +32,7 @@
 
 NOFXi is a secondary development project based on the open-source **NOFX** autonomous AI trading assistant. The original NOFX project introduced an AI trading workflow where the assistant can perceive markets, select models, fetch data, and execute strategy-driven trading tasks. NOFXi keeps that foundation and extends it for a more practical trading-operations assistant experience.
 
-**Our development focus**: make the assistant less like a generic chatbot and more like a professional trading operator. The current NOFXi branch adds a skill-first agent architecture, structured management flows for traders/exchanges/models/strategies, Binance USD-M Futures testnet support, a same-origin market data gateway, on-chain token analysis surfaces, deployment-oriented configuration, and safer diagnostic paths for common trading failures.
+**Our development focus**: make the assistant less like a generic chatbot and more like a professional trading operator. The current NOFXi branch adds a skill-first agent architecture, structured management flows for traders/exchanges/models/strategies, Binance USD-M Futures testnet support, a same-origin market data gateway, deployment-oriented configuration, and safer diagnostic paths for common trading failures.
 
 **Project source**: this project is derived from [NoFxAiOS/nofx](https://github.com/NoFxAiOS/nofx) and is maintained as an independent secondary-development repository at [hereww/nofx-bnbtest](https://github.com/hereww/nofx-bnbtest). Original copyright, license obligations, and upstream attribution are preserved under AGPL-3.0.
 

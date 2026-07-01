@@ -1,0 +1,183 @@
+{
+  "users": [],
+  "ai_models": [],
+  "exchanges": [],
+  "traders": [
+    {
+      "source": "recovery_remote_20260630/cand-f.db",
+      "page": 8170,
+      "offset": 33462040,
+      "rowid": 1,
+      "values": [
+        "9688e0d9_9a0bb67c-7822-4007-b6de-7fbb8819af4d_deepseek_1782061494",
+        "9a0bb67c-7822-4007-b6de-7fbb8819af4d",
+        "测试交易",
+        "9a0bb67c-7822-4007-b6de-7fbb8819af4d_deepseek",
+        "9688e0d9-724c-42e0-9497-e4c2cd6ffbe5",
+        "6a89d9d9-2df3-4a7e-a2dd-fff92f920d48",
+        5009.40795613,
+        60,
+        0,
+        1,
+        1,
+        "2026-06-21 17:04:56.579983149+00:00",
+        "2026-06-28 01:35:47.621115412+00:00",
+        10,
+        5,
+        "",
+        0,
+        0,
+        "",
+        0,
+        "default"
+      ]
+    },
+    {
+      "source": "recovery_remote_20260630/cand-f.db",
+      "page": 8170,
+      "offset": 33462384,
+      "rowid": 2,
+      "values": [
+        "9688e0d9_9a0bb67c-7822-4007-b6de-7fbb8819af4d_deepseek_1782182060",
+        "9a0bb67c-7822-4007-b6de-7fbb8819af4d",
+        "etc交易员",
+        "9a0bb67c-7822-4007-b6de-7fbb8819af4d_deepseek",
+        "9688e0d9-724c-42e0-9497-e4c2cd6ffbe5",
+        "07e87e1d-c966-487e-b396-0ef0dc5ece2a",
+        4921.31330325,
+        15,
+        0,
+        0,
+        1,
+        "2026-06-23 02:34:20.826140567+00:00",
+        "2026-06-30 04:01:49.459827344+00:00",
+        10,
+        5,
+        "",
+        0,
+        0,
+        "",
+        0,
+        "default"
+      ]
+    },
+    {
+      "source": "recovery_remote_20260630/cand-f.db",
+      "page": 8170,
+      "offset": 33463064,
+      "rowid": 3,
+      "values": [
+        "e45c4fa2_9a0bb67c-7822-4007-b6de-7fbb8819af4d_deepseek_1782312895",
+        "9a0bb67c-7822-4007-b6de-7fbb8819af4d",
+        "量化交易主账户以太坊",
+        "9a0bb67c-7822-4007-b6de-7fbb8819af4d_deepseek",
+        "e45c4fa2-f8ab-4bd7-a829-c6a18eee1c7e",
+        "07e87e1d-c966-487e-b396-0ef0dc5ece2a",
+        100,
+        30,
+        0,
+        0,
+        1,
+        "2026-06-24 14:54:55.765434211+00:00",
+        "2026-06-30 04:01:41.149072872+00:��",
+        95,
+        3,
+        "",
+        0,
+        0,
+        "",
+        0,
+        "\u0017�\u000fUIgU"
+      ]
+    },
+    {
+      "source": "recovery_remote_20260630/cand-f.db",
+      "page": 8170,
+      "offset": 33463409,
+      "rowid": 3,
+      "values": [
+        "e45c4fa2_9a0bb67c-7822-4007-b6de-7fbb8819af4d_deepseek_1782312895",
+        "9a0bb67c-7822-4007-b6de-7fbb8819af4d",
+        "量化交易主账户以太坊",
+        "9a0bb67c-7822-4007-b6de-7fbb8819af4d_deepseek",
+        "e45c4fa2-f8ab-4bd7-a829-c6a18eee1c7e",
+        "0585063f-1c80-4e8b-bf54-7c4e8609817c",
+        100,
+        3,
+        0,
+        0,
+        1,
+        "2026-06-24 14:54:55.765434211+00:00",
+        "2026-06-30 11:02:37.46759652+00:00",
+        10,
+        5,
+        "",
+        0,
+        0,
+        "",
+        0,
+        "default"
+      ]
+    }
+  ],
+  "strategies": [
+    {
+      "source": "recovery_remote_20260630/cand-d.db",
+      "page": 8443,
+      "offset": 34579497,
+      "rowid": 7,
+      "values": [
+        "1f21ab0b-4744-4b7f-802d-df7fe75d76a0",
+        "9a0bb67c-7822-4007-b6de-7fbb8819af4d",
+        "新策略",
+        "",
+        0,
+        0,
+        0,
+        1,
+        "{\"strategy_type\":\"ai_trading\",\"language\":\"zh\",\"ai_config\":{\"coin_source\":{\"source_type\":\"ai500\",\"use_ai500\":true,\"ai500_limit\":3,\"use_oi_top\":false,\"oi_top_limit\":3,\"use_oi_low\":false,\"oi_low_limit\":3,\"use_hyper_all\":false,\"use_hyper_main\":false},\"indicators\":{\"klines\":{\"primary_timeframe\":\"5m\",\"primary_count\":20,\"longer_timeframe\":\"4h\",\"longer_count\":10,\"enable_multi_timeframe\":true,\"selected_timeframes\":[\"5m\",\"15m\",\"1h\"]},\"enable_raw_klines\":true,\"enable_ema\":false,\"enable_macd\":false,\"enable_rsi\":false,\"enable_atr\":false,\"enable_boll\":false,\"enable_volume\":true,\"enable_oi\":true,\"enable_funding_rate\":true,\"ema_periods\":[20,50],\"rsi_periods\":[7,14],\"atr_periods\":[14],\"boll_periods\":[20],\"enable_quant_data\":true,\"enable_quant_oi\":true,\"enable_quant_netflow\":true,\"enable_oi_ranking\":true,\"oi_ranking_duration\":\"1h\",\"oi_ranking_limit\":10,\"enable_netflow_ranking\":true,\"netflow_ranking_duration\":\"1h\",\"netflow_ranking_limit\":10,\"enable_price_ranking\":true,\"price_ranking_duration\":\"1h,4h,24h\",\"price_ranking_limit\":10},\"risk_control\":{\"max_positions\":3,\"btc_eth_max_leverage\":5,\"altcoin_max_leverage\":5,\"btc_eth_max_position_value_ratio\":5,\"altcoin_max_position_value_ratio\":1,\"max_margin_usage\":0.9,\"min_position_size\":12,\"min_risk_reward_ratio\":3,\"min_confidence\":75},\"prompt_sections\":{\"role_definition\":\"# 你是一个专业的加密货币交易AI\\n\\n你的任务是根据提供的市场数据做出交易决策。你是一个经验丰富的量化交易员，擅长技术分析和风险管理。\",\"trading_frequency\":\"# ⏱️ 交易频率意识\\n\\n- 优秀交易员：每天2-4笔 ≈ 每小时0.1-0.2笔\\n- 每小时超过2笔 = 过度交易\\n- 单笔持仓时间 ≥ 30-60分钟\\n如果你发现自己每个周期都在交易 → 标准太低；如果持仓不到30分钟就平仓 → 太冲动。\",\"entry_standards\":\"# 🎯 入场标准（严格）\\n\\n只在多个信号共振时入场。自由使用任何有效的分析方法，避免单一指标、信号矛盾、横盘震荡、或平仓后立即重新开仓等低质量行为。\",\"decision_process\":\"# 📋 决策流程\\n\\n1. 检查持仓 → 是否止盈/止损\\n2. 扫描候选币种 + 多时间框架 → 是否存在强信号\\n3. 先写思维链，再输出结构化JSON\"}},\"publish_config\":{\"is_public\":false,\"config_visible\":false}}",
+        "2026-06-21 17:25:50.375035799+00:00",
+        "2026-06-30 04:28:31.228324827+00:00"
+      ]
+    },
+    {
+      "source": "recovery_remote_20260630/cand-d.db",
+      "page": 8696,
+      "offset": 35615380,
+      "rowid": 6,
+      "values": [
+        "6a89d9d9-2df3-4a7e-a2dd-fff92f920d48",
+        "9a0bb67c-7822-4007-b6de-7fbb8819af4d",
+        "币安模拟盘主流币低风险策略",
+        "用于 Binance USD-M Futures 测试网的低风险模拟盘策略；固定监控 BTC/ETH/BNB/SOL/XRP USDT 永续合约，不使用链上合约地址直接下单。",
+        0,
+        0,
+        0,
+        1,
+        "{\"strategy_type\":\"ai_trading\",\"language\":\"zh\",\"ai_config\":{\"coin_source\":{\"source_type\":\"static\",\"static_coins\":[\"BTCUSDT\",\"ETHUSDT\",\"BNBUSDT\",\"SOLUSDT\",\"XRPUSDT\"],\"use_ai500\":false,\"use_oi_top\":false,\"oi_top_limit\":3,\"use_oi_low\":false,\"oi_low_limit\":3,\"use_hyper_all\":false,\"use_hyper_main\":false},\"indicators\":{\"klines\":{\"primary_timeframe\":\"5m\",\"primary_count\":30,\"longer_timeframe\":\"1h\",\"longer_count\":24,\"enable_multi_timeframe\":true,\"selected_timeframes\":[\"5m\",\"15m\",\"1h\"]},\"enable_raw_klines\":true,\"enable_ema\":true,\"enable_macd\":true,\"enable_rsi\":true,\"enable_atr\":true,\"enable_boll\":true,\"enable_volume\":true,\"enable_oi\":true,\"enable_funding_rate\":true,\"ema_periods\":[20,50],\"rsi_periods\":[7,14],\"atr_periods\":[14],\"boll_periods\":[20],\"enable_quant_data\":true,\"enable_quant_oi\":false,\"enable_quant_netflow\":false,\"enable_oi_ranking\":true,\"oi_ranking_duration\":\"1h\",\"oi_ranking_limit\":10,\"enable_netflow_ranking\":true,\"netflow_ranking_duration\":\"1h\",\"netflow_ranking_limit\":10,\"enable_price_ranking\":true,\"price_ranking_duration\":\"1h,4h,24h\",\"price_ranking_limit\":10},\"risk_control\":{\"max_positions\":2,\"btc_eth_max_leverage\":1,\"altcoin_max_leverage\":1,\"btc_eth_max_position_value_ratio\":0.5,\"altcoin_max_position_value_ratio\":0.5,\"max_margin_usage\":0.3,\"min_position_size\":12,\"min_risk_reward_ratio\":2.5,\"min_confidence\":82},\"prompt_sections\":{\"role_definition\":\"# 你是一个专业的加密货币交易AI\\n\\n你的任务是根据提供的市场数据做出交易决策。你是一个经验丰富的量化交易员，擅长技术分析和风险管理。\\n\\n当前环境是 Binance USD-M Futures 测试网，只允许在固定主流币池内模拟交易。禁止把链上合约地址改写成交易对下单。\",\"trading_frequency\":\"# ⏱️ 交易频率意识\\n\\n- 优秀交易员：每天2-4笔 ≈ 每小时0.1-0.2笔\\n- 每小时超过2笔 = 过度交易\\n- 单笔持仓时间 ≥ 30-60分钟\\n如果你发现自己每个周期都在交易 → 标准太低；如果持仓不到30分钟就平仓 → 太冲动。\",\"entry_standards\":\"# 🎯 入场标准（严格）\\n\\n只在多个信号共振时入场。自由使用任何有效的分析方法，避免单一指标、信号矛盾、横盘震荡、或平仓后立即重新开仓等低质量行为。\",\"decision_process\":\"# 📋 决策流程\\n\\n1. 检查持仓 → 是否止盈/止损\\n2. 扫描候选币种 + 多时间框架 → 是否存在强信号\\n3. 先写思维链，再输出结构化JSON\"}},\"publish_config\":{\"is_public\":false,\"config_visible\":true}}",
+        "2026-05-17 17:55:13.300218918+00:00",
+        "2026-06-30 04:28:31.228324827+00:00"
+      ]
+    },
+    {
+      "source": "recovery_remote_20260630/cand-d.db",
+      "page": 8755,
+      "offset": 35857606,
+      "rowid": 5,
+      "values": [
+        "27449012-4203-4d51-9922-eaf08608db04",
+        "9a0bb67c-7822-4007-b6de-7fbb8819af4d",
+        "自定义代币地址监控策略",
+        "监控用户指定的 7 个链上代币地址；当前用于行情观察与 AI 分析，不直接作为 Binance Futures 下单交易对。",
+        0,
+        0,
+        0,
+        1,
+        "{\"strategy_type\":\"ai_trading\",\"language\":\"zh\",\"ai_config\":{\"coin_source\":{\"source_type\":\"static\",\"use_ai500\":false,\"ai500_limit\":1,\"use_oi_top\":false,\"oi_top_limit\":1,\"use_oi_low\":false,\"oi_low_limit\":1,\"use_hyper_all\":false,\"use_hyper_main\":false},\"indicators\":{\"klines\":{\"primary_timeframe\":\"5m\",\"primary_count\":20,\"enable_multi_timeframe\":true,\"selected_timeframes\":[\"5m\"]},\"enable_raw_klines\":true,\"enable_ema\":false,\"enable_macd\":false,\"enable_rsi\":false,\"enable_atr\":false,\"enable_boll\":false,\"enable_volume\":true,\"enable_oi\":false,\"enable_funding_rate\":false,\"enable_quant_data\":false,\"enable_quant_oi\":false,\"enable_quant_netflow\":false,\"enable_oi_ranking\":false,\"enable_netflow_ranking\":false,\"enable_price_ranking\":false},\"custom_prompt\":\"用户给出的 7 个是链上代币合约地址，不是 futures symbol。不要把它们改写成 XXXUSDT，也不要直接下单。当前只做监控展示和风险观察。\",\"risk_control\":{\"max_positions\":1,\"btc_eth_max_leverage\":1,\"altcoin_max_leverage\":1,\"btc_eth_max_position_value_ratio\":0.5,\"altcoin_max_position_value_ratio\":0.5,\"max_margin_usage\":0.1,\"min_position_size\":12,\"min_risk_reward_ratio\":3,\"min_confidence\":95},\"prompt_sections\":{\"role_definition\":\"你是自定义链上代币监控助手，只负责观察用户指定合约地址的 DEX 行情、流动性和成交额，不把合约地址当作 Binance Futures 交易对。\",\"trading_frequency\":\"当前策略用于监控，不用于自动交易。除非系统明确提供链上交易执行适配器，否则所有交易决策都应保持 wait。\",\"entry_standards\":\"只有当合约地址已映射到受支持交易执行环境、流动性足够、滑点和风险校验通过时，才允许进入后续交易评估。当前默认不下单。\",\"decision_process\":\"先读取 /api/custom-tokens 的监控数据，再判断数据是否完整；如果不是可执行交易对，输出 wait 并说明限制。\"}},\"publish_config\":{\"is_public\":false,\"config_visible\":false}}",
+        "2026-05-17 17:18:17.240140804+00:00",
+        "2026-06-30 04:28:31.228324827+00:00"
+      ]
+    }
+  ],
+  "telegram_configs": []
+}

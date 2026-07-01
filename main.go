@@ -8,8 +8,10 @@ import (
 	"nofx/auth"
 	"nofx/config"
 	"nofx/crypto"
+	"nofx/datagateway"
 	"nofx/logger"
 	"nofx/manager"
+	_ "nofx/mcp/payment"
 	_ "nofx/mcp/provider"
 	"nofx/store"
 	"nofx/telegram"
@@ -24,6 +26,10 @@ import (
 )
 
 func main() {
+	if runCLISubcommand(os.Args[1:]) {
+		return
+	}
+
 	// Load .env environment variables
 	_ = godotenv.Load()
 
@@ -35,7 +41,7 @@ func main() {
 	logger.Info("╚════════════════════════════════════════════════════════════╝")
 
 	// Initialize global configuration (loaded from .env)
-	config.Init()
+	config.MustInit()
 	cfg := config.Get()
 	logger.Info("✅ Configuration loaded")
 
@@ -100,6 +106,11 @@ func main() {
 	// Create TraderManager
 	traderManager := manager.NewTraderManager()
 
+	// Start API server shell early so embedded services are available before
+	// persisted running traders are restored.
+	server := api.NewServer(traderManager, st, cryptoService, cfg.APIServerPort)
+	enableEmbeddedDataGateway(server, cfg)
+
 	// Load all traders from database to memory (may auto-start traders with IsRunning=true)
 	if err := traderManager.LoadTradersFromStore(st); err != nil {
 		logger.Fatalf("❌ Failed to load traders: %v", err)
@@ -129,9 +140,6 @@ func main() {
 		}
 	}
 
-	// Start API server
-	server := api.NewServer(traderManager, st, cryptoService, cfg.APIServerPort)
-
 	// Create hot-reload channel for Telegram bot; wire it to the API server
 	// so that POST /api/telegram can trigger a bot restart when the token changes.
 	telegramReloadCh := make(chan struct{}, 1)
@@ -143,7 +151,6 @@ func main() {
 	server.RegisterAgentHandler(agentWeb)
 	nofxiAgent.Start()
 	defer nofxiAgent.Stop()
-	server.OnchainService().StartConfiguredJobs(context.Background())
 
 	go func() {
 		if err := server.Start(); err != nil {
@@ -174,6 +181,32 @@ func main() {
 	// Stop all traders
 	traderManager.StopAll()
 	logger.Info("✅ System shut down safely")
+}
+
+func enableEmbeddedDataGateway(server *api.Server, cfg *config.Config) {
+	if !cfg.DataGatewayEmbedded {
+		logger.Infof("📊 Embedded data gateway disabled; using DATA_GATEWAY_URL=%s", cfg.DataGatewayURL)
+		return
+	}
+
+	dgStore, err := datagateway.OpenStore(cfg.DataGatewayDBPath)
+	if err != nil {
+		logger.Warnf("⚠️ Embedded data gateway unavailable, falling back to DATA_GATEWAY_URL=%s: %v", cfg.DataGatewayURL, err)
+		return
+	}
+
+	dgCfg := datagateway.Config{
+		Token:           cfg.DataGatewayToken,
+		DBPath:          cfg.DataGatewayDBPath,
+		RefreshInterval: cfg.DataGatewayRefreshInterval,
+	}
+	dgSvc := datagateway.NewService(dgCfg, dgStore)
+	handler := datagateway.NewRouter(dgSvc, cfg.DataGatewayToken)
+	ctx, cancel := context.WithCancel(context.Background())
+	server.EnableEmbeddedDataGateway(dgStore, dgSvc, handler, cancel)
+
+	go dgSvc.Start(ctx)
+	logger.Infof("📊 Embedded data gateway enabled at /api/data-gateway (db=%s, refresh=%s)", cfg.DataGatewayDBPath, cfg.DataGatewayRefreshInterval)
 }
 
 // initInstallationID initializes the anonymous installation ID for experience improvement

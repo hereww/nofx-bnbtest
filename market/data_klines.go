@@ -114,9 +114,6 @@ func getKlinesFromCoinAnk(symbol, interval, exchange string, limit int) ([]Kline
 
 // getKlinesFromHyperliquid fetches kline data from Hyperliquid API for xyz dex assets
 func getKlinesFromHyperliquid(symbol, interval string, limit int) ([]Kline, error) {
-	// Remove xyz: prefix if present for the API call
-	baseCoin := strings.TrimPrefix(symbol, "xyz:")
-
 	// Map interval to Hyperliquid format
 	hlInterval := hyperliquid.MapTimeframe(interval)
 
@@ -125,7 +122,7 @@ func getKlinesFromHyperliquid(symbol, interval string, limit int) ([]Kline, erro
 
 	// Fetch candles
 	ctx := context.Background()
-	candles, err := client.GetCandles(ctx, baseCoin, hlInterval, limit)
+	candles, err := client.GetCandles(ctx, symbol, hlInterval, limit)
 	if err != nil {
 		return nil, fmt.Errorf("Hyperliquid API error: %w", err)
 	}

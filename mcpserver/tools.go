@@ -248,41 +248,6 @@ func buildTools(client *APIClient, cfg Config) map[string]ToolSpec {
 				return client.Get(ctx, "/api/custom-tokens", query, cfg.DefaultTimeout)
 			},
 		},
-		{
-			Name:        "nofx_analyze_bsc_token",
-			Description: "Analyze one BSC token contract address using NOFX on-chain analysis. depth defaults to recent.",
-			InputSchema: bscTokenSchema(),
-			Handler: func(ctx context.Context, args map[string]any) (any, error) {
-				address, err := requiredString(args, "address")
-				if err != nil {
-					return nil, err
-				}
-				query := map[string]string{
-					"chain":   "bsc",
-					"address": address,
-					"depth":   defaultString(optionalString(args, "depth"), "recent"),
-				}
-				return client.Get(ctx, "/api/onchain/token-analysis", query, cfg.LongActionTimeout)
-			},
-		},
-		{
-			Name:        "nofx_get_bsc_wallet_graph",
-			Description: "Get wallet relationship graph for one BSC token contract address.",
-			InputSchema: bscWalletGraphSchema(),
-			Handler: func(ctx context.Context, args map[string]any) (any, error) {
-				address, err := requiredString(args, "address")
-				if err != nil {
-					return nil, err
-				}
-				query := map[string]string{
-					"chain":   "bsc",
-					"address": address,
-					"depth":   defaultString(optionalString(args, "depth"), "recent"),
-					"limit":   strconv.Itoa(optionalInt(args, "limit", 80, 1, 200)),
-				}
-				return client.Get(ctx, "/api/onchain/wallet-graph", query, cfg.LongActionTimeout)
-			},
-		},
 	}
 
 	byName := make(map[string]ToolSpec, len(tools))
@@ -531,22 +496,4 @@ func customTokensSchema() map[string]any {
 		},
 		"additionalProperties": false,
 	}
-}
-
-func bscTokenSchema() map[string]any {
-	return map[string]any{
-		"type": "object",
-		"properties": map[string]any{
-			"address": map[string]any{"type": "string", "description": "BSC token contract address."},
-			"depth":   map[string]any{"type": "string", "enum": []string{"recent", "full"}, "default": "recent"},
-		},
-		"required":             []string{"address"},
-		"additionalProperties": false,
-	}
-}
-
-func bscWalletGraphSchema() map[string]any {
-	schema := bscTokenSchema()
-	schema["properties"].(map[string]any)["limit"] = map[string]any{"type": "integer", "minimum": 1, "maximum": 200, "default": 80}
-	return schema
 }

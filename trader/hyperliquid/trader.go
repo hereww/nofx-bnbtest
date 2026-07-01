@@ -5,6 +5,7 @@ import (
 	"crypto/ecdsa"
 	"fmt"
 	"nofx/logger"
+	providerhyperliquid "nofx/provider/hyperliquid"
 	"strconv"
 	"strings"
 	"sync"
@@ -69,37 +70,13 @@ var defaultBuilder *hyperliquid.BuilderInfo = nil
 
 // isXyzDexAsset checks if a symbol is an xyz dex asset
 func isXyzDexAsset(symbol string) bool {
-	// Remove common suffixes to get base symbol
-	base := strings.ToUpper(symbol) // Convert to uppercase for case-insensitive matching
-	for _, suffix := range []string{"USDT", "USD", "-USDC", "-USD"} {
-		if strings.HasSuffix(base, suffix) {
-			base = strings.TrimSuffix(base, suffix)
-			break
-		}
-	}
-	// Remove xyz: prefix if present (case-insensitive)
-	base = strings.TrimPrefix(base, "XYZ:")
-	base = strings.TrimPrefix(base, "xyz:")
-	return xyzDexAssets[base]
+	return providerhyperliquid.IsXYZAsset(symbol)
 }
 
 // convertSymbolToHyperliquid converts standard symbol to Hyperliquid format
 // Example: "BTCUSDT" -> "BTC", "TSLA" -> "xyz:TSLA", "silver" -> "xyz:SILVER"
 func convertSymbolToHyperliquid(symbol string) string {
-	// Convert to uppercase for consistent handling
-	base := strings.ToUpper(symbol)
-
-	// Remove common suffixes to get base symbol
-	for _, suffix := range []string{"USDT", "USD", "-USDC", "-USD"} {
-		if strings.HasSuffix(base, suffix) {
-			base = strings.TrimSuffix(base, suffix)
-			break
-		}
-	}
-	// Remove xyz: prefix if present (case-insensitive, will be re-added if needed)
-	if strings.HasPrefix(strings.ToLower(base), "xyz:") {
-		base = base[4:] // Remove first 4 characters
-	}
+	base := providerhyperliquid.NormalizeCoinBase(symbol)
 
 	// Check if this is an xyz dex asset (stocks, forex, commodities)
 	if isXyzDexAsset(base) {
@@ -161,16 +138,25 @@ func NewHyperliquidTrader(privateKeyHex string, walletAddr string, testnet bool,
 
 	ctx := context.Background()
 
-	// Create Exchange client (Exchange includes Info functionality)
-	exchange := hyperliquid.NewExchange(
-		ctx,
-		privateKey,
-		apiURL,
-		nil,        // Meta will be fetched automatically
-		"",         // vault address (empty for personal account)
-		walletAddr, // wallet address
-		nil,        // SpotMeta will be fetched automatically
-	)
+	// Create Exchange client (Exchange includes Info functionality). The SDK
+	// can panic when automatic metadata fetches fail, so convert that into a
+	// normal setup error for API callers. v0.36 also fixes a spot-meta indexing
+	// panic caused by Hyperliquid token index changes.
+	exchange, err := initExchangeClient(func() *hyperliquid.Exchange {
+		return hyperliquid.NewExchange(
+			ctx,
+			privateKey,
+			apiURL,
+			nil,        // Meta will be fetched automatically
+			"",         // vault address (empty for personal account)
+			walletAddr, // wallet address
+			nil,        // SpotMeta will be fetched automatically
+			nil,        // Perp dex metadata will be fetched automatically
+		)
+	})
+	if err != nil {
+		return nil, err
+	}
 
 	logger.Infof("✓ Hyperliquid trader initialized successfully (testnet=%v, wallet=%s)", testnet, walletAddr)
 

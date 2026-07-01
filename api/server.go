@@ -8,9 +8,10 @@ import (
 	"nofx/auth"
 	"nofx/config"
 	"nofx/crypto"
+	"nofx/datagateway"
 	"nofx/logger"
 	"nofx/manager"
-	"nofx/onchain"
+	"nofx/provider/nofxos"
 	"nofx/store"
 	"strings"
 	"time"
@@ -25,11 +26,14 @@ type Server struct {
 	store                     *store.Store
 	cryptoHandler             *CryptoHandler
 	exchangeAccountStateCache *ExchangeAccountStateCache
-	onchainService            *onchain.Service
-	onchainAIReports          *onchainAIReportJobStore
+	dataGatewayStore          *datagateway.Store
+	dataGatewayService        *datagateway.Service
+	dataGatewayHandler        http.Handler
+	dataGatewayCancel         context.CancelFunc
 	httpServer                *http.Server
 	port                      int
 	telegramReloadCh          chan<- struct{} // signal Telegram bot to reload
+	authLimiter               *ipRateLimiter
 }
 
 // NewServer Creates API server
@@ -51,15 +55,24 @@ func NewServer(traderManager *manager.TraderManager, st *store.Store, cryptoServ
 		store:                     st,
 		cryptoHandler:             cryptoHandler,
 		exchangeAccountStateCache: NewExchangeAccountStateCache(),
-		onchainService:            onchain.NewService(st),
-		onchainAIReports:          newOnchainAIReportJobStore(),
 		port:                      port,
+		authLimiter:               newIPRateLimiter(1.0/6.0, 8),
 	}
 
 	// Setup routes
 	s.setupRoutes()
 
 	return s
+}
+
+// EnableEmbeddedDataGateway mounts the data-gateway controllers into this API
+// server and routes internal NofxOS clients to the same in-process handler.
+func (s *Server) EnableEmbeddedDataGateway(store *datagateway.Store, service *datagateway.Service, handler http.Handler, cancel context.CancelFunc) {
+	s.dataGatewayStore = store
+	s.dataGatewayService = service
+	s.dataGatewayHandler = handler
+	s.dataGatewayCancel = cancel
+	nofxos.SetEmbeddedGatewayHandler(handler)
 }
 
 // corsMiddleware CORS middleware
@@ -80,6 +93,10 @@ func corsMiddleware() gin.HandlerFunc {
 
 // setupRoutes Setup routes
 func (s *Server) setupRoutes() {
+	if s.authLimiter == nil {
+		s.authLimiter = newIPRateLimiter(1.0/6.0, 8)
+	}
+
 	// API route group
 	api := s.router.Group("/api")
 	{
@@ -95,10 +112,11 @@ func (s *Server) setupRoutes() {
 		// System config (no authentication required, for frontend to determine admin mode/registration status)
 		s.route(api, "GET", "/config", "Get system configuration", s.handleGetSystemConfig)
 
-		// Crypto related endpoints (no authentication required, not exposed to bot)
+		// Crypto related endpoints (no authentication required, not exposed to bot).
+		// Do not expose a public decrypt endpoint: transport encryption is
+		// one-way from the browser to authenticated config handlers.
 		api.GET("/crypto/config", s.cryptoHandler.HandleGetCryptoConfig)
 		api.GET("/crypto/public-key", s.cryptoHandler.HandleGetPublicKey)
-		api.POST("/crypto/decrypt", s.cryptoHandler.HandleDecryptSensitiveData)
 
 		// Public competition data (no authentication required)
 		s.route(api, "GET", "/traders", "Public trader list", s.handlePublicTraderList)
@@ -112,14 +130,6 @@ func (s *Server) setupRoutes() {
 		s.route(api, "GET", "/klines", "Candlestick data (?symbol=&interval=&limit=)", s.handleKlines)
 		s.route(api, "GET", "/symbols", "Available trading symbols", s.handleSymbols)
 		s.route(api, "GET", "/custom-tokens", "DEX market snapshots for monitored custom token contract addresses", s.handleCustomTokens)
-		s.route(api, "GET", "/onchain/token-analysis", "On-chain token holder, trade, and risk analysis by contract address", s.handleOnchainTokenAnalysis)
-		s.route(api, "GET", "/onchain/wallet-graph", "On-chain wallet relationship graph for one token", s.handleOnchainWalletGraph)
-		s.route(api, "GET", "/onchain/early-wallet-flow", "Early buyer wallet flow, cost basis, transfer descendants, and realized PnL by token", s.handleOnchainEarlyWalletFlow)
-		s.route(api, "GET", "/onchain/early-wallet-flow/export", "Export early buyer wallet flow analysis as CSV", s.handleOnchainEarlyWalletFlowExport)
-		s.route(api, "GET", "/onchain/index-status", "On-chain token index status by contract address", s.handleOnchainIndexStatus)
-		s.route(api, "POST", "/onchain/ai-report/preview", "Preview the AI prompt for an on-chain analysis report", s.handleOnchainAIReportPreview)
-		s.route(api, "POST", "/onchain/ai-report", "Generate an AI on-chain analysis report for one token", s.handleOnchainAIReport)
-		s.route(api, "GET", "/onchain/ai-report/:job_id", "Get async AI on-chain report generation status", s.handleOnchainAIReportJob)
 		s.route(api, "GET", "/data-gateway/*path", "Proxy self-hosted market data gateway", s.handleDataGatewayProxy)
 
 		// Public strategy market (no authentication required)
@@ -127,10 +137,9 @@ func (s *Server) setupRoutes() {
 		s.route(api, "POST", "/strategies/estimate-tokens", "Estimate token usage for a strategy config", s.handleEstimateTokens)
 
 		// Authentication related routes (no authentication required)
-		s.route(api, "POST", "/register", "Register new user", s.handleRegister)
-		s.route(api, "POST", "/login", "User login, returns JWT token", s.handleLogin)
-		s.route(api, "POST", "/reset-password", "Reset password", s.handleResetPassword)
-		s.route(api, "POST", "/reset-account", "Clear all users and reset system to allow re-registration", s.handleResetAccount)
+		authRoutes := api.Group("/", rateLimitMiddleware(s.authLimiter))
+		s.route(authRoutes, "POST", "/register", "Register new user", s.handleRegister)
+		s.route(authRoutes, "POST", "/login", "User login, returns JWT token", s.handleLogin)
 
 		// Routes requiring authentication
 		protected := api.Group("/", s.authMiddleware())
@@ -140,8 +149,6 @@ func (s *Server) setupRoutes() {
 			s.route(protected, "GET", "/agent/preferences", "Get persistent agent preferences", s.handleGetAgentPreferences)
 			s.route(protected, "POST", "/agent/preferences", "Create persistent agent preference", s.handleCreateAgentPreference)
 			s.route(protected, "DELETE", "/agent/preferences/:id", "Delete persistent agent preference", s.handleDeleteAgentPreference)
-			s.route(protected, "POST", "/onchain/index-token", "Start full-history on-chain token indexing", s.handleOnchainIndexToken)
-			s.route(protected, "POST", "/onchain/early-wallet-flow/index", "Start full-history indexing for early wallet flow analysis", s.handleOnchainEarlyWalletFlowIndex)
 
 			// User account management
 			s.routeWithSchema(protected, "PUT", "/user/password", "Change current user password",
@@ -636,16 +643,24 @@ func (s *Server) Start() error {
 
 // Shutdown Gracefully shutdown server
 func (s *Server) Shutdown() error {
-	if s.httpServer == nil {
-		return nil
+	var shutdownErr error
+	if s.httpServer != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		shutdownErr = s.httpServer.Shutdown(ctx)
+		cancel()
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	return s.httpServer.Shutdown(ctx)
-}
-
-func (s *Server) OnchainService() *onchain.Service {
-	return s.onchainService
+	if s.dataGatewayCancel != nil {
+		s.dataGatewayCancel()
+		s.dataGatewayCancel = nil
+	}
+	if s.dataGatewayStore != nil {
+		if err := s.dataGatewayStore.Close(); err != nil && shutdownErr == nil {
+			shutdownErr = err
+		}
+		s.dataGatewayStore = nil
+	}
+	nofxos.SetEmbeddedGatewayHandler(nil)
+	return shutdownErr
 }
 
 // SetTelegramReloadCh sets the channel used to signal the Telegram bot to reload

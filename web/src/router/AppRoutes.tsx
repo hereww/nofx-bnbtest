@@ -21,7 +21,6 @@ import { AITradersPage } from '../components/trader/AITradersPage'
 import { FAQPage } from '../pages/FAQPage'
 import { LandingPage } from '../pages/LandingPage'
 import { DataPage } from '../pages/DataPage'
-import { OnchainAnalysisPage } from '../pages/OnchainAnalysisPage'
 import { AgentChatPage } from '../pages/AgentChatPage'
 import { SettingsPage } from '../pages/SettingsPage'
 import { StrategyMarketPage } from '../pages/StrategyMarketPage'
@@ -464,14 +463,6 @@ export function AppRoutes() {
           element={
             <AppChrome currentPage="data" showFooter={false}>
               <DataPage />
-            </AppChrome>
-          }
-        />
-        <Route
-          path={ROUTES.onchain}
-          element={
-            <AppChrome currentPage="onchain" showFooter={false}>
-              <OnchainAnalysisPage />
             </AppChrome>
           }
         />

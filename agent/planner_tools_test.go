@@ -66,20 +66,6 @@ func TestPlannerToolsKeepFullManageStrategyForMutationIntent(t *testing.T) {
 	}
 }
 
-func TestPlannerToolsForOnchainIntentUseTokenAnalysisTool(t *testing.T) {
-	tools := plannerToolsForText("分析火凤凰持有人购买时间和关联钱包")
-	names := toolNamesForTest(tools)
-
-	if !containsString(names, "analyze_token_onchain") {
-		t.Fatalf("expected analyze_token_onchain in %v", names)
-	}
-	for _, unexpected := range []string{"execute_trade", "manage_trader", "manage_exchange_config"} {
-		if containsString(names, unexpected) {
-			t.Fatalf("did not expect %q in onchain tools %v", unexpected, names)
-		}
-	}
-}
-
 func toolNamesForTest(tools []mcp.Tool) []string {
 	names := make([]string, 0, len(tools))
 	for _, tool := range tools {
